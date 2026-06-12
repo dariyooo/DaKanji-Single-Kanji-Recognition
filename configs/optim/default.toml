@@ -1,0 +1,4 @@
+epochs = 100
+lr = 0.001
+scheduler = "cosine"
+warmup_epochs = 3

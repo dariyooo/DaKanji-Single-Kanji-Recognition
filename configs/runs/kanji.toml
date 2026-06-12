@@ -1,0 +1,6 @@
+device = "auto"
+data = "kanji"
+model = "efficientnet_lite_b0"
+optim = "default"
+augment = "default"
+log = "default"

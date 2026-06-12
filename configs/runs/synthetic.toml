@@ -1,0 +1,7 @@
+# Composes typed fragments from configs/<type>/<name>.toml. Runs out of the box.
+device = "auto"
+data = "synthetic"
+model = "efficientnet_lite_b0"
+optim = "quick"
+augment = "default"
+log = "synthetic"

@@ -1,0 +1,6 @@
+device = "auto"
+data = "kanji_128"
+model = "mobilenetv3_small"
+optim = "default"
+augment = "default"
+log = "default"

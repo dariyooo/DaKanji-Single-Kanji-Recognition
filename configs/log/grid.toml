@@ -1,0 +1,3 @@
+out_dir = "runs/grid"
+mlflow = true
+mlflow_experiment = "dakanji-grid"

@@ -1,0 +1,4 @@
+root = "/path/to/dakanji_single_kanji_cnn"   # root/<class_index>/*.png
+image_size = [64, 64]
+batch_size = 256
+num_workers = 8

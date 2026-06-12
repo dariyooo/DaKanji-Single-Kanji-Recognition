@@ -1,0 +1,10 @@
+# Grid search: model + image_size are swept (fp32). Quantize the winner with quantize.py.
+device = "auto"
+data = "synthetic"   # swap to "kanji" for real runs
+optim = "grid"
+augment = "default"
+log = "grid"
+
+[grid]
+backbones = ["efficientnet_lite_b0", "mobilenetv3_small"]
+image_sizes = [64, 128]

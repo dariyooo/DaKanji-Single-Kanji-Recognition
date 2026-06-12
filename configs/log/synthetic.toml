@@ -1,0 +1,3 @@
+out_dir = "runs/synthetic"
+run_name = "synthetic"
+mlflow = true
