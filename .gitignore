@@ -1,28 +1,34 @@
-dataset
-.history
-.venv
-**checkpoint.ipynb
-
-# ignore vs code files
-.vscode
-
-# exclude release folder
-releases/
-
-# exclude tensorboard logs
-**/tensorboard_logs/**
-
-# python compiled files
+# Python
+__pycache__/
 *.pyc
+*.pyo
+*.egg-info/
+/build/
+/dist/
 
-# ignore the models
-**.hdf5
-**/model
-/retinanet_kuzushiji/models/**
+# uv / virtualenv
+.venv/
+.python-version
 
+# tooling caches
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.ipynb_checkpoints/
 
-# ignore fonts
-/fonts/**
-single_kanji_cnn/supported_fonts_1.txt
-single_kanji_cnn/supported_fonts_2.txt
-disvg_output.svg
+# datasets & local data (root-anchored so they don't match the data/ package)
+/dataset/
+/data/
+
+# generated outputs (all under outputs/; change paths.OUTPUTS_DIR to relocate)
+/outputs/*
+!/outputs/.gitkeep
+*.pt
+*.onnx
+*.pte
+*.hdf5
+
+# editor
+.vscode/
+.idea/
+.history/
