@@ -1,6 +1,15 @@
+# EfficientNet-Lite B0 on the Kanji dataset. Set your dataset path in configs/data/kanji.toml.
 device = "auto"
-data = "kanji"
+data = "kanji"       # -> configs/data/kanji.toml  (edit `root` there)
+log = "default"      # -> configs/log/default.toml
+
 model = "efficientnet_lite_b0"
-optim = "default"
-augment = "default"
-log = "default"
+
+[optim]
+epochs = 100
+lr = 0.001
+scheduler = "cosine"
+warmup_epochs = 3
+
+[augment]
+mix_p = 0.5

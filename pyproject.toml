@@ -16,18 +16,24 @@ dependencies = [
     "matplotlib>=3.8",
     "marimo>=0.9",
     "tqdm>=4.66",
+    "mlflow>=2.14",  # manual logging in the training loop; local sqlite store under outputs/
 ]
 
 [project.optional-dependencies]
-# Experiment tracking (manual MLflow logging in the training loop).
-tracking = ["mlflow>=2.14"]
 # TorchAO PT2E int8 quantization (stage 2; lowered to XNNPACK via executorch).
 optimize = ["torchao>=0.10"]
 # ONNX export + validation (onnxscript is required by torch's exporter).
 onnx = ["onnx>=1.16", "onnxruntime>=1.18", "onnxscript>=0.1"]
-# ExecuTorch on-device export. Platform/version sensitive; install separately if needed.
+# ExecuTorch on-device export. Platform/version sensitive (no wheel on some platforms).
 executorch = ["executorch>=0.4"]
-dev = ["pytest>=8.0", "ruff>=0.6", "mypy>=1.11"]
+# Dev/test environment: tooling + every runtime extra the test suite exercises, so the full
+# suite runs without skips (a fresh `uv sync --extra dev` is enough; don't install ad hoc).
+dev = [
+    "char-recognition[optimize,onnx,executorch]",
+    "pytest>=8.0",
+    "ruff>=0.6",
+    "mypy>=1.11",
+]
 
 [build-system]
 requires = ["setuptools>=68"]
@@ -42,6 +48,11 @@ char_recognition = ["py.typed"]
 [tool.uv]
 # Keep heavy / platform-specific extras out of the default sync; opt in explicitly.
 default-groups = []
+
+[tool.pytest.ini_options]
+# Collect only from tests/. Without this, pytest recurses the repo root (ignoring
+# .gitignore) and crawls data/ — millions of dataset files — which stalls every run.
+testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 110

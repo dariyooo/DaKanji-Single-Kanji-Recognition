@@ -1,3 +1,0 @@
-epochs = 5
-lr = 0.001
-scheduler = "cosine"

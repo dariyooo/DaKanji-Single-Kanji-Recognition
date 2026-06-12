@@ -1,9 +1,16 @@
-# Grid search: model + image_size are swept (fp32). Quantize the winner with quantize.py.
+# Grid search over model x image_size (fp32). Quantize the winner with quantize.py.
+# `model` is omitted here — the [grid] sweep sets it per point (see scripts/grid_search.py).
 device = "auto"
 data = "synthetic"   # swap to "kanji" for real runs
-optim = "grid"
-augment = "default"
-log = "grid"
+log = "grid"         # -> configs/log/grid.toml
+
+[optim]
+epochs = 5
+lr = 0.001
+scheduler = "cosine"
+
+[augment]
+mix_p = 0.5
 
 [grid]
 backbones = ["efficientnet_lite_b0", "mobilenetv3_small"]

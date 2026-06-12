@@ -391,6 +391,7 @@ source = { editable = "." }
 dependencies = [
     { name = "marimo" },
     { name = "matplotlib" },
+    { name = "mlflow" },
     { name = "numpy" },
     { name = "timm" },
     { name = "torch" },
@@ -400,9 +401,14 @@ dependencies = [
 
 [package.optional-dependencies]
 dev = [
+    { name = "executorch" },
     { name = "mypy" },
+    { name = "onnx" },
+    { name = "onnxruntime" },
+    { name = "onnxscript" },
     { name = "pytest" },
     { name = "ruff" },
+    { name = "torchao" },
 ]
 executorch = [
     { name = "executorch" },
@@ -415,16 +421,14 @@ onnx = [
 optimize = [
     { name = "torchao" },
 ]
-tracking = [
-    { name = "mlflow" },
-]
 
 [package.metadata]
 requires-dist = [
+    { name = "char-recognition", extras = ["optimize", "onnx", "executorch"], marker = "extra == 'dev'" },
     { name = "executorch", marker = "extra == 'executorch'", specifier = ">=0.4" },
     { name = "marimo", specifier = ">=0.9" },
     { name = "matplotlib", specifier = ">=3.8" },
-    { name = "mlflow", marker = "extra == 'tracking'", specifier = ">=2.14" },
+    { name = "mlflow", specifier = ">=2.14" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.11" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "onnx", marker = "extra == 'onnx'", specifier = ">=1.16" },
@@ -438,7 +442,7 @@ requires-dist = [
     { name = "torchvision", specifier = ">=0.19" },
     { name = "tqdm", specifier = ">=4.66" },
 ]
-provides-extras = ["tracking", "optimize", "onnx", "executorch", "dev"]
+provides-extras = ["optimize", "onnx", "executorch", "dev"]
 
 [[package]]
 name = "charset-normalizer"

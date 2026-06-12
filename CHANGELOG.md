@@ -9,8 +9,8 @@ Rewrite: TensorFlow/Keras + Jupyter -> PyTorch + Marimo, managed by uv (Ruff, my
 - Plug-and-play model registry (EfficientNet-Lite B0 port + timm reference, MobileNetV3,
   tiny baseline) with configurable input size.
 - Augmentation on `torchvision.transforms.v2` (MixUp, CutMix, shear, sharpness, cutout).
-- Generic folder data loader (labels + folder) + synthetic test data; TOML configs
-  split by type and composed by run configs.
+- Generic folder data loader (labels + folder) + synthetic test data; one TOML run config
+  per run (inline recipe) referencing reusable data/log fragments.
 - Two-stage int8 quantization: train fp32, then a **PT2E QAT** fine-tune (conv+linear)
   lowered to an **XNNPACK ExecuTorch `.pte`** for on-device CPU/ARM. Config-driven
   grid-search sweeps model × input size; ONNX and ExecuTorch export keep dynamic

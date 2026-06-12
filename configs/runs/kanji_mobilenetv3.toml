@@ -1,6 +1,15 @@
+# MobileNetV3-Small on 128x128 Kanji — a lighter alternative to EfficientNet-Lite.
 device = "auto"
-data = "kanji_128"
+data = "kanji_128"   # -> configs/data/kanji_128.toml
+log = "default"      # -> configs/log/default.toml
+
 model = "mobilenetv3_small"
-optim = "default"
-augment = "default"
-log = "default"
+
+[optim]
+epochs = 100
+lr = 0.001
+scheduler = "cosine"
+warmup_epochs = 3
+
+[augment]
+mix_p = 0.5

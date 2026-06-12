@@ -1,0 +1,66 @@
+"""Export a trained checkpoint to deployable artifacts: ONNX + ExecuTorch (fp32 ``.pte``).
+
+Both bake resize + normalize into the graph, so they accept a raw grayscale image of any
+size. For the int8 / XNNPACK ``.pte``, use ``scripts/quantize.py`` instead.
+
+    uv run python scripts/export.py --from outputs/runs/best.pt
+"""
+
+from __future__ import annotations
+
+import argparse
+from pathlib import Path
+
+from char_recognition.export import export_executorch, export_onnx, load_recognizer, onnx_parity
+from char_recognition.paths import EXPORTS_DIR, RUNS_DIR
+
+
+def parse_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument("--from", dest="ckpt", type=Path, default=RUNS_DIR / "best.pt", help="checkpoint to export")
+    p.add_argument("--onnx", type=Path, default=EXPORTS_DIR / "model.onnx", help="ONNX output path")
+    p.add_argument("--pte", type=Path, default=EXPORTS_DIR / "model.pte", help="ExecuTorch fp32 output path")
+    p.add_argument("--opset", type=int, default=18)
+    p.add_argument("--static", action="store_true", help="fix the input shape (default: dynamic batch/H/W)")
+    p.add_argument("--skip-onnx", action="store_true")
+    p.add_argument("--skip-executorch", action="store_true")
+    p.add_argument("--no-verify", action="store_true", help="skip the ONNX vs PyTorch parity check")
+    return p.parse_args()
+
+
+def _mb(path: Path) -> float:
+    return path.stat().st_size / 1e6
+
+
+def main() -> None:
+    args = parse_args()
+    if not args.ckpt.exists():
+        raise SystemExit(f"checkpoint not found: {args.ckpt} (train first, or pass --from)")
+    model = load_recognizer(args.ckpt)
+    dynamic = not args.static
+    print(f"loaded {args.ckpt} | {model.backbone_name} | {model.num_classes} classes | {model.image_size}")
+
+    if not args.skip_onnx:
+        onnx_path = export_onnx(
+            model, args.onnx, image_size=model.image_size, in_channels=model.in_channels,
+            opset=args.opset, dynamic=dynamic,
+        )
+        print(f"wrote {onnx_path} ({_mb(onnx_path):.1f} MB)")
+        if not args.no_verify:
+            for h, w, diff in onnx_parity(
+                model, onnx_path, image_size=model.image_size, in_channels=model.in_channels
+            ):
+                print(f"  parity {h}x{w}: max|delta| = {diff:.2e}")
+
+    if not args.skip_executorch:
+        try:
+            pte_path = export_executorch(
+                model, args.pte, image_size=model.image_size, in_channels=model.in_channels, dynamic=dynamic
+            )
+            print(f"wrote {pte_path} ({_mb(pte_path):.1f} MB)")
+        except ImportError as exc:
+            print(f"skipped ExecuTorch (.pte): {exc}")
+
+
+if __name__ == "__main__":
+    main()

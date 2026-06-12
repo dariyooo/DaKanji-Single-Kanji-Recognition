@@ -1,0 +1,106 @@
+"""Stage 2: quantize a trained fp32 checkpoint for on-device deployment.
+
+PT2E Quantization-Aware *fine-tuning* (conv + linear, int8), lowered to an XNNPACK
+ExecuTorch ``.pte`` that runs on CPU/ARM. The fp32 checkpoint stays the source of truth;
+this produces a derived, deployable artifact.
+
+    # Stage 1 (elsewhere): uv run python scripts/train.py --config configs/runs/kanji.toml
+    # Stage 2:
+    uv run python scripts/quantize.py --config configs/runs/kanji.toml --qat-epochs 8 --lr 1e-5
+"""
+
+from __future__ import annotations
+
+import argparse
+from pathlib import Path
+
+import torch
+
+from char_recognition.config import load_config
+from char_recognition.engine import prepare_data
+from char_recognition.export import example_input, export_xnnpack, load_recognizer
+from char_recognition.models import ProbabilityModel
+from char_recognition.optimize import convert_quantized, prepare_xnnpack
+from char_recognition.optimize.pt2e import CAPTURE_BATCH
+from char_recognition.paths import EXPORTS_DIR, resolve_output
+
+
+def parse_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument("--config", type=Path, required=True, help="run config (dataset + model + image size)")
+    p.add_argument(
+        "--from", dest="ckpt", type=Path, default=None, help="fp32 checkpoint (default <out_dir>/best.pt)"
+    )
+    p.add_argument("--output", type=Path, default=EXPORTS_DIR / "model_xnnpack.pte")
+    p.add_argument("--qat-epochs", type=int, default=5)
+    p.add_argument("--lr", type=float, default=1e-5, help="QAT fine-tune learning rate (keep small)")
+    p.add_argument("--device", default="cpu", help="QAT fine-tune device (convert/lower is CPU)")
+    p.add_argument(
+        "--max-steps", type=int, default=None, help="cap batches per QAT epoch / accuracy eval (quick check)"
+    )
+    return p.parse_args()
+
+
+@torch.no_grad()
+def _accuracy(model: torch.nn.Module, loader, device: torch.device, max_steps: int | None = None) -> float:
+    correct = total = 0
+    for step, (images, targets) in enumerate(loader):
+        preds = model(images.to(device)).argmax(dim=1)
+        correct += (preds == targets.to(device)).sum().item()
+        total += int(targets.numel())
+        if max_steps is not None and step + 1 >= max_steps:
+            break
+    return correct / total if total else 0.0
+
+
+def main() -> None:
+    args = parse_args()
+    cfg = load_config(args.config)
+    cfg.augment.mix_p = 0.0  # int targets for the NLL fine-tune; mixing isn't needed here
+    cfg.data.num_workers = 0
+    device = torch.device(args.device)
+
+    train_loader, val_loader, _labels, num_classes = prepare_data(cfg, device)
+
+    # Rebuild the fp32 model from the checkpoint meta, so backbone/size always match the weights.
+    ckpt_path = args.ckpt or resolve_output(cfg.log.out_dir) / "best.pt"
+    model = load_recognizer(ckpt_path, map_location=args.device).train()
+    if model.num_classes != num_classes:
+        raise SystemExit(f"checkpoint has {model.num_classes} classes, dataset has {num_classes}")
+    image_size, in_channels = model.image_size, model.in_channels
+    print(f"loaded fp32 weights from {ckpt_path} | {num_classes} classes | {image_size}")
+
+    # Capture the probability model (softmax baked in) and insert QAT fake-quant.
+    deployable = ProbabilityModel(model).to(device)
+    example = (example_input(image_size, in_channels=in_channels, batch=CAPTURE_BATCH).to(device),)
+    prepared = prepare_xnnpack(deployable, example, qat=True, dynamic=True)
+
+    # Short QAT fine-tune (NLL on the softmax output == cross-entropy on logits).
+    optimizer = torch.optim.AdamW(prepared.parameters(), lr=args.lr)
+    for epoch in range(args.qat_epochs):
+        for step, (images, targets) in enumerate(train_loader):
+            optimizer.zero_grad(set_to_none=True)
+            probs = prepared(images.to(device))
+            loss = torch.nn.functional.nll_loss(torch.log(probs.clamp_min(1e-9)), targets.to(device))
+            loss.backward()
+            optimizer.step()
+            if args.max_steps is not None and step + 1 >= args.max_steps:
+                break
+        print(f"  qat epoch {epoch + 1}/{args.qat_epochs}  loss={loss.item():.4f}")
+
+    converted = convert_quantized(prepared)
+    print(f"int8 val accuracy: {_accuracy(converted, val_loader, device, args.max_steps):.4f}")
+
+    pte = export_xnnpack(converted, args.output, image_size=image_size, in_channels=in_channels)
+    print(f"wrote {pte} ({pte.stat().st_size / 1e6:.1f} MB)")
+
+    # Sanity-check the artifact actually loads + runs in the ExecuTorch runtime.
+    from executorch.runtime import Runtime
+
+    method = Runtime.get().load_program(str(pte)).load_method("forward")
+    out = method.execute([example_input(image_size, in_channels=in_channels)])[0]
+    print(f"runtime check OK: output {tuple(out.shape)}")
+
+
+if __name__ == "__main__":
+    main()

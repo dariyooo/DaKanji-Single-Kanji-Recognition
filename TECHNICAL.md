@@ -1,6 +1,6 @@
-# DaKanji — Single Character Recognition (PyTorch + Marimo)
+# DaKanji: Single Character Recognition (PyTorch + Marimo)
 
-Recognize a single handwritten/printed character (Kanji, Hiragana, Katakana — and,
+Recognize a single handwritten/printed character (Kanji, Hiragana, Katakana, and,
 because the pipeline is language agnostic, any script you have data for).
 
 This is a ground-up rewrite of the original TensorFlow/Keras + Jupyter project:
@@ -26,8 +26,8 @@ image of any size* and needs no preprocessing code on device.
 
 ```bash
 # 1. Install uv (https://docs.astral.sh/uv/) if you don't have it, then:
-uv sync                       # core deps (PyTorch, torchvision, marimo, ...)
-uv sync --extra onnx --extra dev   # + ONNX export and dev tooling
+uv sync                # core deps (PyTorch, torchvision, marimo, ...)
+uv sync --extra dev    # full dev/test env: tooling + every runtime extra the suite needs
 
 # 2. Verify everything works on random synthetic data (no dataset needed):
 uv run pytest -q
@@ -37,25 +37,28 @@ uv run python scripts/train.py --synthetic --classes 20 --epochs 3
 uv run marimo edit notebooks/train.py
 ```
 
-Optional extras: `--extra tracking` (MLflow), `--extra optimize` (TorchAO),
-`--extra executorch` (on-device export).
+MLflow is a core dependency, so logging works out of the box (local sqlite store under
+`outputs/`). `--extra dev` additionally pulls in `optimize`/`onnx`/`executorch` so the whole
+suite runs without skips. The individual extras still exist for slim runtime installs:
+`--extra optimize` (TorchAO), `--extra onnx`, `--extra executorch` (on-device export;
+platform/version sensitive).
 
 ---
 
 ## Project structure
 
 ```text
-configs/               # TOML config fragments, split by type, composed by a run config
-  data/ model/ optim/ augment/ log/   # one fragment per type (e.g. data/kanji.toml)
-  runs/                # run configs that reference one fragment of each (+ [grid])
-outputs/               # all generated artifacts (checkpoints, exports, MLflow) — gitignored
+configs/               # TOML run configs (recipe inline) + reusable data/log fragments
+  runs/                # one file per run: inline model/[optim]/[augment] + data/log refs (+ [grid])
+  data/ log/           # reusable fragments referenced by name (dataset paths, output targets)
+outputs/               # all generated artifacts (checkpoints, exports, MLflow), gitignored
 src/char_recognition/
   paths.py             # central paths: configs/fonts/labels + OUTPUTS_DIR (change in one place)
   config/              # one module per config: data / model / augment / optim / log + loader
   data/
     labels.py          # load class labels (one-per-line, or legacy one-char-per-line)
-    dataset.py         # CharFolderDataset — generic root/<class>/*.png loader -> (C,H,W)
-    synthetic.py       # RandomCharDataset — learnable random data for tests
+    dataset.py         # CharFolderDataset: generic root/<class>/*.png loader -> (C,H,W)
+    synthetic.py       # RandomCharDataset: learnable random data for tests
     datamodule.py      # split + DataLoaders (caching/prefetch equivalents)
     augment.py         # transforms.v2 pipeline + MixUp/CutMix collate
   models/
@@ -81,11 +84,11 @@ src/char_recognition/
   engine/runner.py     # wire a Config into a training run (shared by CLI/grid/notebook)
 notebooks/
   train.py             # interactive training notebook (Marimo): config + tweak widgets
-  export_onnx.py       # export to ONNX + parity check
-  export_executorch.py # export to ExecuTorch
 scripts/
   train.py             # stage 1: headless fp32 training CLI
-  quantize.py          # stage 2: PT2E QAT fine-tune of a checkpoint -> XNNPACK .pte
+  evaluate.py          # top-1/5/10 + prediction grid on a held-out set (fp32 ckpt or int8 .pte)
+  export.py            # export a checkpoint to ONNX + ExecuTorch fp32 .pte (with parity check)
+  quantize.py          # stage 2: PT2E QAT fine-tune of a checkpoint -> XNNPACK int8 .pte
   grid_search.py       # sweep model x input size (fp32, config-driven)
 tests/                 # end-to-end checks on random data (models/data/engine/export/backend)
 labels.txt             # ordered class labels for the Japanese model
@@ -96,7 +99,7 @@ fonts/                 # CJK font for rendering predictions in matplotlib
 
 ## Data loaders
 
-The loader contract is intentionally minimal — **labels + a folder, nothing more**:
+The loader contract is intentionally minimal. It needs only **labels + a folder, nothing more**:
 
 ```text
 root/
@@ -142,7 +145,7 @@ model = CharRecognizer(num_classes=3036, backbone="efficientnet_lite_b0", image_
 | backbone | params* | notes |
 |---|---:|---|
 | `efficientnet_lite_b0` | ~3.4M | the **original** architecture, via timm's `tf_efficientnet_lite0` |
-| `mobilenetv3_small` | ~1.6M | modern, smallest — great on-device target |
+| `mobilenetv3_small` | ~1.6M | modern, smallest, great on-device target |
 | `mobilenetv3_large` | ~4.3M | modern, strongest of the set |
 | `tiny_cnn` | ~0.3M | fast baseline |
 
@@ -150,7 +153,7 @@ model = CharRecognizer(num_classes=3036, backbone="efficientnet_lite_b0", image_
 
 > torchvision has no EfficientNet-*Lite* variant (only standard EfficientNet / V2), so
 > `efficientnet_lite_b0` uses [timm](https://github.com/huggingface/pytorch-image-models)'s
-> `tf_efficientnet_lite0` — the same architecture (and TF-style padding) as the original.
+> `tf_efficientnet_lite0`, the same architecture (and TF-style padding) as the original.
 
 Register your own with `register_backbone("name", builder)` where `builder` has the
 signature `(num_classes, in_channels=1, **kwargs) -> nn.Module`.
@@ -170,28 +173,43 @@ evaluation and the exported artifact all agree.
 
 ## Training
 
-Hyperparameters live in version-controlled TOML fragments under `configs/`, split by
-type and composed by a **run config** that references one fragment of each. Configs are
-logged to MLflow so every run is reproducible:
+A training run is described by one **run config** in `configs/runs/`. It has two parts:
+
+- **The recipe, inline:** `model` (a backbone name), and `[optim]` / `[augment]` tables.
+  This is the experiment, so you read it in one place.
+- **Two references:** `data` and `log` name a file in `configs/data/` and `configs/log/`.
+  These hold the reusable, machine-specific bits (dataset path, output/MLflow target), so
+  you set your dataset path *once* and point many runs at it.
+
+Anything you omit uses the dataclass default (see `src/char_recognition/config/`). Every
+resolved config is logged to MLflow, so a run is reproducible.
 
 ```toml
-# configs/runs/kanji.toml      (a run = one fragment per type)
+# configs/runs/kanji.toml      (a run = recipe inline + data/log referenced)
 device = "auto"
-data    = "kanji"              # -> configs/data/kanji.toml (root, labels, image_size, ...)
-model   = "efficientnet_lite_b0"
-optim   = "default"
-augment = "default"
-log     = "default"
+data = "kanji"                 # -> configs/data/kanji.toml  (set `root` there)
+log = "default"                # -> configs/log/default.toml
+
+model = "efficientnet_lite_b0" # backbone name; or a [model] table for e.g. dropout
+
+[optim]
+epochs = 100
+lr = 0.001
+scheduler = "cosine"           # "cosine" | "step_decay" | "none"
+
+[augment]
+mix_p = 0.5                    # MixUp/CutMix probability (0 disables)
 ```
 
 ```toml
-# configs/data/kanji.toml      (the referenced dataset fragment)
+# configs/data/kanji.toml      (the referenced dataset fragment, edit this for your machine)
 root = "/data/kanji"           # dataset folder: root/<class_index>/*.png
 labels_file = "labels.txt"
 image_size = [64, 64]
 ```
 
-A fragment can be reused by many runs (e.g. one `data/kanji.toml`, several models).
+To add a model or sweep a hyperparameter, just edit the run file. There are no per-value
+fragment files to chase. To onboard a new dataset, drop one file in `configs/data/`.
 
 ### Interactive (Marimo)
 
@@ -220,13 +238,14 @@ A custom loop in `engine/trainer.py` implements, explicitly:
 
 - **Mixed precision** via `torch.amp.autocast`. On CUDA this is fp16 + `GradScaler`
   (the direct equivalent of Keras `mixed_float16`); on MPS/CPU it is bf16.
-- **Scheduling** — `cosine` (default, with warmup) or `step_decay` (reproduces the
+- **Scheduling:** `cosine` (default, with warmup) or `step_decay` (reproduces the
   original 4 %-every-3-epochs rule).
-- **Checkpointing** — manual `torch.save` of model/optimizer/scheduler + metadata,
+- **Checkpointing:** manual `torch.save` of model/optimizer/scheduler + metadata,
   tracking `best.pt` and `last.pt` (replaces `ModelCheckpoint`).
-- **Logging** — manual MLflow logging of params, metrics and figures (replaces the
-  Keras TensorBoard callback). Enabled via config; skipped with a warning if MLflow
-  isn't installed (`uv sync --extra tracking`).
+- **Logging:** manual MLflow logging of params, metrics and figures (replaces the
+  Keras TensorBoard callback) to a local sqlite store under `outputs/`. Enabled via config
+  (`log.mlflow`), and **best-effort**: if the backend errors mid-run it disables itself with
+  a warning rather than crashing training.
 
 ---
 
@@ -262,20 +281,20 @@ backbones = ["efficientnet_lite_b0", "mobilenetv3_small"]
 image_sizes = [64, 128]
 ```
 
-Quantization is *not* part of the sweep — train fp32 first, then quantize the winner
+Quantization is *not* part of the sweep. Train fp32 first, then quantize the winner
 (see below). Keeping the two stages separate means one fp32 source of truth per
 architecture and a cheap, repeatable quantization pass on top.
 
 ---
 
-## Optimization — two-stage int8 quantization (PT2E QAT → XNNPACK)
+## Optimization: two-stage int8 quantization (PT2E QAT → XNNPACK)
 
 Quantization is a **second stage**, deliberately decoupled from training:
 
-1. **Stage 1 — `scripts/train.py`** trains the fp32 model. The fp32 checkpoint is the
+1. **Stage 1 (`scripts/train.py`)** trains the fp32 model. The fp32 checkpoint is the
    source of truth; you keep it, re-quantize from it, and never lose precision to a
    one-way conversion.
-2. **Stage 2 — `scripts/quantize.py`** takes that checkpoint, runs a short
+2. **Stage 2 (`scripts/quantize.py`)** takes that checkpoint, runs a short
    **PT2E Quantization-Aware fine-tune** (int8), converts to a real int8 graph, and
    lowers it to an **XNNPACK ExecuTorch `.pte`** that runs on CPU/ARM.
 
@@ -293,7 +312,7 @@ loop recovers the accuracy int8 PTQ tends to drop; `quantize.py` keeps it short 
 low LR because it starts from converged fp32 weights.
 
 The model is wrapped in `ProbabilityModel` (softmax) **before** capture, so the lowered
-`.pte` emits probabilities directly — a converted graph can't be re-wrapped afterwards.
+`.pte` emits probabilities directly; a converted graph can't be re-wrapped afterwards.
 Capture and re-export share one dynamic-shape spec (`optimize.pt2e.dynamic_input_shapes`):
 dynamic batch + H/W, captured with a batch-`CAPTURE_BATCH` example (a batch-1 example
 would 0/1-specialize the batch dim and break it). The deployed graph still runs at batch 1
@@ -302,7 +321,7 @@ XNNPACK runtime at two input sizes to guard this end to end.
 
 > Trade-offs: int8 has a small accuracy cost vs fp32 (the QAT fine-tune narrows it);
 > the export pins the deployment backend to XNNPACK (CPU/ARM). CoreML/ANE int8 is out of
-> scope — coremltools currently can't lower the int8 cast (fp16 CoreML works, int8 does not).
+> scope, because coremltools currently can't lower the int8 cast (fp16 CoreML works, int8 does not).
 
 ---
 
@@ -311,29 +330,31 @@ XNNPACK runtime at two input sizes to guard this end to end.
 Because preprocessing is in the model, **one artifact serves every runtime input size**.
 There are three export targets:
 
-- **ONNX** — fp32, dynamic batch + H/W (`export_onnx`, notebook `export_onnx.py`).
-- **ExecuTorch fp32** — `.pte`, dynamic H/W (`export_executorch`, notebook `export_executorch.py`).
-- **ExecuTorch int8 / XNNPACK** — `.pte` produced by the **stage-2 `scripts/quantize.py`**
+- **ONNX:** fp32, dynamic batch + H/W (`export_onnx`).
+- **ExecuTorch fp32:** `.pte`, dynamic H/W (`export_executorch`).
+- **ExecuTorch int8 / XNNPACK:** `.pte` produced by the **stage-2 `scripts/quantize.py`**
   pipeline above (`export_xnnpack` lowers the PT2E-converted graph). This is the on-device
   deployment artifact.
 
-The fp32 exports run from dedicated Marimo notebooks (point them at a checkpoint):
+The two fp32 formats are produced together by one script (point it at a checkpoint):
 
 ```bash
-# ONNX (dynamic batch + height + width); also checks parity vs PyTorch
-uv run marimo edit notebooks/export_onnx.py
-
-# ExecuTorch fp32 (.pte, dynamic height/width)
-uv sync --extra executorch
-uv run marimo edit notebooks/export_executorch.py
+uv sync --extra onnx --extra executorch   # if not already on --extra dev
+uv run python scripts/export.py --from outputs/runs/best.pt
 ```
 
-> All three exports are covered by the test suite — the ExecuTorch/XNNPACK tests load the
-> `.pte` in the runtime and run it at multiple input sizes. The `executorch` package is
-> optional and version-sensitive (`uv sync --extra executorch`); those tests skip when it's absent.
+It writes `model.onnx` + `model.pte` to `outputs/exports/`, checks ONNX↔PyTorch parity at
+several input sizes (the model dimensions come from the checkpoint), and skips the `.pte`
+with a note if `executorch` isn't installed. Flags: `--onnx`/`--pte` paths,
+`--skip-onnx`/`--skip-executorch`, `--static`, `--opset`, `--no-verify`.
 
-Programmatically, `export_onnx` / `export_executorch` from `char_recognition.export`
-do the same:
+> All three exports are covered by the test suite. The ExecuTorch/XNNPACK tests load the
+> `.pte` in the runtime and run it at multiple input sizes. `--extra dev` installs
+> `executorch`, so these run as part of the normal suite; they fall back to a skip only on a
+> platform where `executorch` can't be installed at all (it's version/platform sensitive).
+
+The script is a thin wrapper; `export_onnx` / `export_executorch` / `onnx_parity` from
+`char_recognition.export` are callable directly:
 
 ```python
 from char_recognition.export import export_onnx, load_recognizer
@@ -362,7 +383,7 @@ probs = sess.run(None, {"image": raw})[0]                            # (1, num_c
 `efficientnet_lite_b0` is the same architecture as the original Keras model (timm's
 `tf_efficientnet_lite0`), so trained on the same ETL/KanjiVG data with the recipe above
 it should reach accuracy in the same ballpark as the original (~0.95 val accuracy in the
-legacy project). This is an expectation, not a guarantee — weights aren't ported, and
+legacy project). This is an expectation, not a guarantee. Weights aren't ported, and
 the in-model normalization differs (per-image max vs the original's per-batch max).
 Reproducing the exact number needs the original dataset, which isn't bundled; the
 included tests instead prove the full loop *learns* on synthetic data. Use

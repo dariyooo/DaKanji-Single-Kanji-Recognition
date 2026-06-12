@@ -1,7 +1,16 @@
-# Composes typed fragments from configs/<type>/<name>.toml. Runs out of the box.
+# A run = a dataset + a log target (referenced from their folders) + an inline recipe.
+# This one runs out of the box on random synthetic data — no dataset needed.
 device = "auto"
-data = "synthetic"
-model = "efficientnet_lite_b0"
-optim = "quick"
-augment = "default"
-log = "synthetic"
+data = "synthetic"   # -> configs/data/synthetic.toml
+log = "synthetic"    # -> configs/log/synthetic.toml
+
+model = "efficientnet_lite_b0"   # a backbone registry name
+
+[optim]
+epochs = 8
+lr = 0.001
+scheduler = "cosine"
+warmup_epochs = 1
+
+[augment]
+mix_p = 0.5   # MixUp/CutMix probability (0 disables)
