@@ -75,7 +75,7 @@ def load_config(path: str | Path) -> Config:
         log=referenced("log", LogConfig),
         model=model(),
         optim=inline("optim", OptimConfig),
-        augment=inline("augment", AugmentConfig, ("cutout_scale", "cutout_ratio")),
+        augment=inline("augment", AugmentConfig, ("cutout_scale", "cutout_ratio", "blur_sigma")),
         device=run.get("device", "auto"),
     )
 

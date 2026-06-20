@@ -12,4 +12,6 @@ scheduler = "cosine"
 warmup_epochs = 3
 
 [augment]
-mix_p = 0.5
+stroke_p = 0.4   # thin/thicken strokes: robust to thin handwriting vs thick rendered data
+blur_p = 0.4     # soften strokes (replaces the app's inference-time blur)
+mix_p = 0.2      # light MixUp only (CutMix off: halving a glyph destroys it)
