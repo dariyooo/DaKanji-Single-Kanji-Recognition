@@ -11,7 +11,14 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from char_recognition.export import export_executorch, export_onnx, load_recognizer, onnx_parity
+from char_recognition.export import (
+    export_coreml,
+    export_executorch,
+    export_onnx,
+    export_vulkan,
+    load_recognizer,
+    onnx_parity,
+)
 from char_recognition.paths import EXPORTS_DIR, RUNS_DIR
 
 
@@ -25,6 +32,9 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--skip-onnx", action="store_true")
     p.add_argument("--skip-executorch", action="store_true")
     p.add_argument("--no-verify", action="store_true", help="skip the ONNX vs PyTorch parity check")
+    # Accelerator delegates (opt-in; fixed-shape fp16, usually slower than XNNPACK for this model).
+    p.add_argument("--vulkan", type=Path, default=None, help="also write a Vulkan-delegated .pte here")
+    p.add_argument("--coreml", type=Path, default=None, help="also write a CoreML (Apple) .pte here")
     return p.parse_args()
 
 
@@ -55,6 +65,19 @@ def main() -> None:
             print(f"wrote {pte_path} ({_mb(pte_path):.1f} MB)")
         except ImportError as exc:
             print(f"skipped ExecuTorch (.pte): {exc}")
+
+    # Opt-in accelerator delegates (fixed-shape fp16; usually slower than XNNPACK CPU for this model).
+    for flag, name, fn in (
+        (args.vulkan, "Vulkan", export_vulkan),
+        (args.coreml, "CoreML", export_coreml),
+    ):
+        if flag is None:
+            continue
+        try:
+            out = fn(model, flag, image_size=model.image_size)
+            print(f"wrote {out} ({_mb(out):.1f} MB, {name} delegate, fixed (1,3,{model.image_size}) input)")
+        except Exception as exc:  # backend may be absent / unavailable on this platform
+            print(f"skipped {name}: {type(exc).__name__}: {str(exc).splitlines()[-1][:100]}")
 
 
 if __name__ == "__main__":
