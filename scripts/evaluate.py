@@ -21,7 +21,7 @@ from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
 from char_recognition.config import Config, load_config, resolve_device
-from char_recognition.data import CharFolderDataset, load_labels
+from char_recognition.data import CharFolderDataset, canonical_class_map, load_labels
 from char_recognition.export import load_recognizer
 from char_recognition.paths import JP_FONT, resolve_output
 
@@ -112,12 +112,19 @@ def main() -> None:
     labels = load_labels(cfg.data.labels_file)
 
     if args.pte:
+        if not args.pte.exists():
+            raise SystemExit(f".pte not found: {args.pte} (quantize first, or pass an existing --pte)")
         predict, image_size, in_channels, num_classes, source = _pte_predictor(args.pte, cfg)
     else:
         ckpt = args.ckpt or resolve_output(cfg.log.out_dir) / "best.pt"
+        if not ckpt.exists():
+            raise SystemExit(f"checkpoint not found: {ckpt} (train first, or pass --from)")
         predict, image_size, in_channels, num_classes, source = _checkpoint_predictor(ckpt, device)
 
-    dataset = CharFolderDataset(root, image_size=image_size, in_channels=in_channels)
+    dataset = CharFolderDataset(
+        root, image_size=image_size, in_channels=in_channels,
+        class_to_idx=canonical_class_map(root, labels),
+    )
     if dataset.num_classes != num_classes:
         raise SystemExit(f"model has {num_classes} classes, eval set has {dataset.num_classes}")
     print(f"eval {source} on {root} | {len(dataset)} images | {dataset.num_classes} classes")

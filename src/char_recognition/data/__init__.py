@@ -8,7 +8,7 @@ from char_recognition.data.datamodule import (
     build_dataloaders,
     random_split,
 )
-from char_recognition.data.dataset import CharFolderDataset
+from char_recognition.data.dataset import CharFolderDataset, canonical_class_map
 from char_recognition.data.labels import Labels, load_labels
 from char_recognition.data.synthetic import RandomCharDataset
 
@@ -20,6 +20,7 @@ __all__ = [
     "build_dataloaders",
     "build_mix_collate",
     "build_train_transform",
+    "canonical_class_map",
     "load_labels",
     "random_split",
 ]

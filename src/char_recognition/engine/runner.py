@@ -17,6 +17,7 @@ from char_recognition.data import (
     build_dataloaders,
     build_mix_collate,
     build_train_transform,
+    canonical_class_map,
     load_labels,
     random_split,
 )
@@ -44,11 +45,14 @@ def prepare_data(cfg: Config, device: torch.device) -> tuple[DataLoader, DataLoa
     """Build train/val loaders + labels from a config (folder data or synthetic)."""
     base: Dataset[tuple[Tensor, int]]
     if cfg.data.root:
+        labels = load_labels(cfg.data.labels_file)
         folder = CharFolderDataset(
-            cfg.data.root, image_size=cfg.data.image_size, in_channels=cfg.data.in_channels
+            cfg.data.root,
+            image_size=cfg.data.image_size,
+            in_channels=cfg.data.in_channels,
+            class_to_idx=canonical_class_map(cfg.data.root, labels),
         )
         num_classes = folder.num_classes
-        labels = load_labels(cfg.data.labels_file)
         base = folder
     else:
         num_classes = cfg.data.synthetic_classes
