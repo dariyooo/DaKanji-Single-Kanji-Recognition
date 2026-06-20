@@ -19,6 +19,7 @@ import torch
 from char_recognition.config import load_config
 from char_recognition.engine import prepare_data
 from char_recognition.export import example_input, export_xnnpack, load_recognizer
+from char_recognition.export.loading import CAPTURE_CHANNELS
 from char_recognition.models import ProbabilityModel
 from char_recognition.optimize import convert_quantized, prepare_xnnpack
 from char_recognition.optimize.pt2e import CAPTURE_BATCH
@@ -60,19 +61,25 @@ def main() -> None:
     cfg.data.num_workers = 0
     device = torch.device(args.device)
 
+    # Check the checkpoint up front, before building the (potentially slow) dataset.
+    ckpt_path = args.ckpt or resolve_output(cfg.log.out_dir) / "best.pt"
+    if not ckpt_path.exists():
+        raise SystemExit(f"checkpoint not found: {ckpt_path} (train first, or pass --from)")
+
     train_loader, val_loader, _labels, num_classes = prepare_data(cfg, device)
 
     # Rebuild the fp32 model from the checkpoint meta, so backbone/size always match the weights.
-    ckpt_path = args.ckpt or resolve_output(cfg.log.out_dir) / "best.pt"
     model = load_recognizer(ckpt_path, map_location=args.device).train()
     if model.num_classes != num_classes:
         raise SystemExit(f"checkpoint has {model.num_classes} classes, dataset has {num_classes}")
     image_size, in_channels = model.image_size, model.in_channels
     print(f"loaded fp32 weights from {ckpt_path} | {num_classes} classes | {image_size}")
 
-    # Capture the probability model (softmax baked in) and insert QAT fake-quant.
+    # Capture the probability model (softmax baked in) and insert QAT fake-quant. Capture at
+    # CAPTURE_CHANNELS (RGB) so the .pte accepts colour; the 1-channel fine-tune data still
+    # flows through (the channel dim is dynamic, min 1).
     deployable = ProbabilityModel(model).to(device)
-    example = (example_input(image_size, in_channels=in_channels, batch=CAPTURE_BATCH).to(device),)
+    example = (example_input(image_size, in_channels=CAPTURE_CHANNELS, batch=CAPTURE_BATCH).to(device),)
     prepared = prepare_xnnpack(deployable, example, qat=True, dynamic=True)
 
     # Short QAT fine-tune (NLL on the softmax output == cross-entropy on logits).
@@ -91,7 +98,7 @@ def main() -> None:
     converted = convert_quantized(prepared)
     print(f"int8 val accuracy: {_accuracy(converted, val_loader, device, args.max_steps):.4f}")
 
-    pte = export_xnnpack(converted, args.output, image_size=image_size, in_channels=in_channels)
+    pte = export_xnnpack(converted, args.output, image_size=image_size)
     print(f"wrote {pte} ({pte.stat().st_size / 1e6:.1f} MB)")
 
     # Sanity-check the artifact actually loads + runs in the ExecuTorch runtime.

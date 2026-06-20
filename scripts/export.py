@@ -42,21 +42,16 @@ def main() -> None:
 
     if not args.skip_onnx:
         onnx_path = export_onnx(
-            model, args.onnx, image_size=model.image_size, in_channels=model.in_channels,
-            opset=args.opset, dynamic=dynamic,
+            model, args.onnx, image_size=model.image_size, opset=args.opset, dynamic=dynamic
         )
         print(f"wrote {onnx_path} ({_mb(onnx_path):.1f} MB)")
         if not args.no_verify:
-            for h, w, diff in onnx_parity(
-                model, onnx_path, image_size=model.image_size, in_channels=model.in_channels
-            ):
-                print(f"  parity {h}x{w}: max|delta| = {diff:.2e}")
+            for channels, side, diff in onnx_parity(model, onnx_path, image_size=model.image_size):
+                print(f"  parity {channels}ch @ {side}: max|delta| = {diff:.2e}")
 
     if not args.skip_executorch:
         try:
-            pte_path = export_executorch(
-                model, args.pte, image_size=model.image_size, in_channels=model.in_channels, dynamic=dynamic
-            )
+            pte_path = export_executorch(model, args.pte, image_size=model.image_size, dynamic=dynamic)
             print(f"wrote {pte_path} ({_mb(pte_path):.1f} MB)")
         except ImportError as exc:
             print(f"skipped ExecuTorch (.pte): {exc}")

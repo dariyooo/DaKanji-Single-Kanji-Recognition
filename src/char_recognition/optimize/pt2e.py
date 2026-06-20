@@ -36,6 +36,7 @@ def dynamic_input_shapes(enabled: bool = True) -> dict[str, dict[int, Any]] | No
     return {
         "x": {
             0: Dim("batch", min=1, max=4096),
+            1: Dim("channels", min=1, max=4),
             2: Dim("height", min=16, max=4096),
             3: Dim("width", min=16, max=4096),
         }

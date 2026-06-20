@@ -9,7 +9,7 @@ from pathlib import Path
 
 from torch import nn
 
-from char_recognition.export.loading import deployable_model, example_input
+from char_recognition.export.loading import CAPTURE_CHANNELS, deployable_model, example_input
 
 __all__ = ["export_executorch"]
 
@@ -19,12 +19,14 @@ def export_executorch(
     path: str | Path,
     *,
     image_size: tuple[int, int],
-    in_channels: int = 1,
     dynamic: bool = True,
     max_side: int = 1024,
     probabilities: bool = True,
 ) -> Path:
-    """Lower ``model`` to an ExecuTorch ``.pte`` program. Returns the written path."""
+    """Lower ``model`` to an ExecuTorch ``.pte`` program. Returns the written path.
+
+    Accepts grayscale (C=1) or RGB (C=3) input; the model reduces colour to one channel.
+    """
     import torch
     from torch.export import Dim, export
 
@@ -39,14 +41,18 @@ def export_executorch(
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     export_model = (deployable_model(model) if probabilities else model).eval()
-    sample = (example_input(image_size, in_channels=in_channels),)
+    sample = (example_input(image_size, in_channels=CAPTURE_CHANNELS),)
 
     dynamic_shapes = None
     if dynamic:
-        # Height/width vary at runtime; batch stays 1 for typical on-device inference.
-        height = Dim("height", min=16, max=max_side)
-        width = Dim("width", min=16, max=max_side)
-        dynamic_shapes = {"x": {2: height, 3: width}}
+        # Channel (gray/RGB) and height/width vary at runtime; batch stays 1 on device.
+        dynamic_shapes = {
+            "x": {
+                1: Dim("channels", min=1, max=4),
+                2: Dim("height", min=16, max=max_side),
+                3: Dim("width", min=16, max=max_side),
+            }
+        }
 
     with torch.no_grad():
         exported = export(export_model, sample, dynamic_shapes=dynamic_shapes)

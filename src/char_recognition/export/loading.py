@@ -14,6 +14,11 @@ from torch import Tensor, nn
 from char_recognition.engine.checkpoint import CheckpointManager
 from char_recognition.models.recognizer import CharRecognizer, ProbabilityModel
 
+# Capture exports with a 3-channel (RGB) example: the model's channel-mean reduces any input
+# to 1 channel, and a >1 capture stops the exporter from specializing that mean to a no-op.
+# The export's channel dim is marked dynamic (min 1), so the artifact still accepts grayscale.
+CAPTURE_CHANNELS = 3
+
 
 def load_recognizer(checkpoint_path: str | Path, *, map_location: str = "cpu") -> CharRecognizer:
     ckpt = CheckpointManager.load(checkpoint_path, map_location=map_location)

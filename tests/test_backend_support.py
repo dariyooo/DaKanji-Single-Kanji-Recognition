@@ -17,12 +17,13 @@ def test_xnnpack_int8_lowers_and_runs() -> None:
     from executorch.runtime import Runtime
 
     from char_recognition.export import export_xnnpack
+    from char_recognition.export.loading import CAPTURE_CHANNELS
     from char_recognition.optimize import convert_quantized, prepare_xnnpack
     from char_recognition.optimize.pt2e import CAPTURE_BATCH
 
     # Probability model captured up front (softmax in the graph); PTQ for test speed.
     model = ProbabilityModel(CharRecognizer(8, backbone="tiny_cnn", image_size=(64, 64)))
-    example = (torch.randint(0, 256, (CAPTURE_BATCH, 1, 64, 64)).float(),)
+    example = (torch.randint(0, 256, (CAPTURE_BATCH, CAPTURE_CHANNELS, 64, 64)).float(),)
     prepared = prepare_xnnpack(model, example, qat=False, dynamic=True)
     prepared(example[0])  # calibrate observers
     converted = convert_quantized(prepared)
@@ -30,8 +31,8 @@ def test_xnnpack_int8_lowers_and_runs() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         pte = export_xnnpack(converted, Path(tmp) / "m.pte", image_size=(64, 64), dynamic=True)
         method = Runtime.get().load_program(str(pte)).load_method("forward")
-        # Two different H/W prove the int8 .pte keeps dynamic shapes on-device.
-        for shape in [(1, 1, 64, 64), (1, 1, 128, 90)]:
+        # Varying H/W and channels (1=gray, 3=RGB) proves the int8 .pte keeps them dynamic.
+        for shape in [(1, 1, 64, 64), (1, 1, 128, 90), (1, 3, 64, 64)]:
             out = method.execute([torch.randint(0, 256, shape).float()])[0]
             assert out.shape == (shape[0], 8)
             assert abs(out.sum().item() - 1.0) < 1e-3  # softmax probabilities

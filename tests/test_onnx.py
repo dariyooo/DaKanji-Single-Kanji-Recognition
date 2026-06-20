@@ -38,6 +38,6 @@ def test_onnx_parity_matches_pytorch() -> None:
     model = CharRecognizer(8, backbone="tiny_cnn", image_size=(64, 64)).eval()
     with tempfile.TemporaryDirectory() as tmp:
         path = export_onnx(model, Path(tmp) / "m.onnx", image_size=(64, 64), dynamic=True)
-        # Includes sizes the graph wasn't traced at, exercising the in-graph resize.
-        for _h, _w, diff in onnx_parity(model, path, image_size=(64, 64), in_channels=1):
+        # Covers untraced sizes and channel counts (1=gray, 3=RGB), exercising resize + RGB->gray.
+        for _c, _side, diff in onnx_parity(model, path, image_size=(64, 64)):
             assert diff < 1e-4
