@@ -24,7 +24,7 @@ from char_recognition.paths import EXPORTS_DIR, RUNS_DIR
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--from", dest="ckpt", type=Path, default=RUNS_DIR / "best.pt", help="checkpoint to export")
+    p.add_argument("--from", dest="ckpt", type=Path, default=RUNS_DIR / "best.pt", help="checkpoint")
     p.add_argument("--onnx", type=Path, default=EXPORTS_DIR / "model.onnx", help="ONNX output path")
     p.add_argument("--pte", type=Path, default=EXPORTS_DIR / "model.pte", help="ExecuTorch fp32 output path")
     p.add_argument("--opset", type=int, default=18)
@@ -32,8 +32,15 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--skip-onnx", action="store_true")
     p.add_argument("--skip-executorch", action="store_true")
     p.add_argument("--no-verify", action="store_true", help="skip the ONNX vs PyTorch parity check")
-    # Accelerator delegates (opt-in; fixed-shape fp16, usually slower than XNNPACK for this model).
+    # Accelerator delegates (opt-in; fixed-shape, usually slower than XNNPACK for this model).
     p.add_argument("--vulkan", type=Path, default=None, help="also write a Vulkan-delegated .pte here")
+    p.add_argument(
+        "--vulkan-quantize",
+        type=int,
+        choices=(4, 8),
+        default=None,
+        help="weight-only int4/int8 on the Linear classifier for --vulkan (default: fp32)",
+    )
     p.add_argument("--coreml", type=Path, default=None, help="also write a CoreML (Apple) .pte here")
     return p.parse_args()
 
@@ -66,16 +73,18 @@ def main() -> None:
         except ImportError as exc:
             print(f"skipped ExecuTorch (.pte): {exc}")
 
-    # Opt-in accelerator delegates (fixed-shape fp16; usually slower than XNNPACK CPU for this model).
-    for flag, name, fn in (
-        (args.vulkan, "Vulkan", export_vulkan),
-        (args.coreml, "CoreML", export_coreml),
+    # Opt-in accelerator delegates (fixed-shape; usually slower than XNNPACK CPU for this model).
+    for flag, name, fn, kwargs in (
+        (args.vulkan, "Vulkan", export_vulkan, {"weight_bits": args.vulkan_quantize}),
+        (args.coreml, "CoreML", export_coreml, {}),
     ):
         if flag is None:
             continue
+        bits = kwargs.get("weight_bits")
+        precision = f"int{bits} weights" if bits else "fp32/fp16"
         try:
-            out = fn(model, flag, image_size=model.image_size)
-            print(f"wrote {out} ({_mb(out):.1f} MB, {name} delegate, fixed (1,3,{model.image_size}) input)")
+            out = fn(model, flag, image_size=model.image_size, **kwargs)
+            print(f"wrote {out} ({_mb(out):.1f} MB, {name} delegate, {precision}, fixed input)")
         except Exception as exc:  # backend may be absent / unavailable on this platform
             print(f"skipped {name}: {type(exc).__name__}: {str(exc).splitlines()[-1][:100]}")
 
