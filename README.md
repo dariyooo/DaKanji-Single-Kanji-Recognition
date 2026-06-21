@@ -49,6 +49,10 @@ uv run python scripts/grid_search.py --config configs/runs/grid.toml
 
 # Or experiment interactively (widgets for backbone / size / lr; logs to MLflow)
 uv run marimo edit notebooks/train.py
+
+# Apple CoreML .pte (ANE/GPU/CPU). Self-contained: uv pins an isolated torch 2.7 toolchain
+# from the script header, because the CoreML delegate miscompiles on the main torch 2.12 stack.
+uv run scripts/export_coreml.py --from outputs/runs/best.pt
 ```
 
 ## How it works

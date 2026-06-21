@@ -1,7 +1,9 @@
 """Export a trained checkpoint to deployable artifacts: ONNX + ExecuTorch (fp32 ``.pte``).
 
 Both bake resize + normalize into the graph, so they accept a raw grayscale image of any
-size. For the int8 / XNNPACK ``.pte``, use ``scripts/quantize.py`` instead.
+size. For the int8 / XNNPACK ``.pte``, use ``scripts/quantize.py``. For the Apple CoreML
+``.pte``, use ``scripts/export_coreml.py`` (its delegate miscompiles on this toolchain, so it
+runs in a separate pinned environment).
 
     uv run python scripts/export.py --from outputs/runs/best.pt
 """
@@ -12,7 +14,6 @@ import argparse
 from pathlib import Path
 
 from char_recognition.export import (
-    export_coreml,
     export_executorch,
     export_onnx,
     export_vulkan,
@@ -32,7 +33,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--skip-onnx", action="store_true")
     p.add_argument("--skip-executorch", action="store_true")
     p.add_argument("--no-verify", action="store_true", help="skip the ONNX vs PyTorch parity check")
-    # Accelerator delegates (opt-in; fixed-shape, usually slower than XNNPACK for this model).
+    # Vulkan delegate (opt-in; cross-platform GPU, fixed-shape; usually slower than XNNPACK here).
     p.add_argument("--vulkan", type=Path, default=None, help="also write a Vulkan-delegated .pte here")
     p.add_argument(
         "--vulkan-quantize",
@@ -41,7 +42,6 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="weight-only int4/int8 on the Linear classifier for --vulkan (default: fp32)",
     )
-    p.add_argument("--coreml", type=Path, default=None, help="also write a CoreML (Apple) .pte here")
     return p.parse_args()
 
 
@@ -73,20 +73,17 @@ def main() -> None:
         except ImportError as exc:
             print(f"skipped ExecuTorch (.pte): {exc}")
 
-    # Opt-in accelerator delegates (fixed-shape; usually slower than XNNPACK CPU for this model).
-    for flag, name, fn, kwargs in (
-        (args.vulkan, "Vulkan", export_vulkan, {"weight_bits": args.vulkan_quantize}),
-        (args.coreml, "CoreML", export_coreml, {}),
-    ):
-        if flag is None:
-            continue
-        bits = kwargs.get("weight_bits")
-        precision = f"int{bits} weights" if bits else "fp32/fp16"
+    # Opt-in Vulkan delegate (fixed-shape; usually slower than XNNPACK CPU for this model). CoreML
+    # is intentionally not here: its delegate miscompiles on this toolchain (torch 2.12 /
+    # executorch 1.3), so it lives in scripts/export_coreml.py on a pinned torch 2.7 environment.
+    if args.vulkan is not None:
+        bits = args.vulkan_quantize
+        precision = f"int{bits} weights" if bits else "fp32"
         try:
-            out = fn(model, flag, image_size=model.image_size, **kwargs)
-            print(f"wrote {out} ({_mb(out):.1f} MB, {name} delegate, {precision}, fixed input)")
+            out = export_vulkan(model, args.vulkan, image_size=model.image_size, weight_bits=bits)
+            print(f"wrote {out} ({_mb(out):.1f} MB, Vulkan delegate, {precision}, fixed input)")
         except Exception as exc:  # backend may be absent / unavailable on this platform
-            print(f"skipped {name}: {type(exc).__name__}: {str(exc).splitlines()[-1][:100]}")
+            print(f"skipped Vulkan: {type(exc).__name__}: {str(exc).splitlines()[-1][:100]}")
 
 
 if __name__ == "__main__":
