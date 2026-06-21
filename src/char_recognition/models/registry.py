@@ -10,7 +10,8 @@ from collections.abc import Callable
 
 from torch import nn
 
-from char_recognition.models.timm_backbones import efficientnet_lite_b0
+from char_recognition.models.small_cnn import small_cnn
+from char_recognition.models.timm_backbones import efficientnet_lite_b0, efficientnet_lite_b4
 from char_recognition.models.tiny_cnn import tiny_cnn
 from char_recognition.models.torchvision_backbones import mobilenetv3_large, mobilenetv3_small
 
@@ -18,9 +19,11 @@ BackboneBuilder = Callable[..., nn.Module]
 
 _REGISTRY: dict[str, BackboneBuilder] = {
     "efficientnet_lite_b0": efficientnet_lite_b0,  # timm tf_efficientnet_lite0
+    "efficientnet_lite_b4": efficientnet_lite_b4,  # timm tf_efficientnet_lite4 (large end)
     "mobilenetv3_small": mobilenetv3_small,
     "mobilenetv3_large": mobilenetv3_large,
-    "tiny_cnn": tiny_cnn,
+    "small_cnn": small_cnn,  # compact hand-rolled CNN (small end of a real sweep)
+    "tiny_cnn": tiny_cnn,  # test-speed baseline, not a deployment candidate
 }
 
 

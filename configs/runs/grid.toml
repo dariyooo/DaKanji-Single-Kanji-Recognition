@@ -13,5 +13,6 @@ scheduler = "cosine"
 mix_p = 0.5
 
 [grid]
-backbones = ["efficientnet_lite_b0", "mobilenetv3_small"]
+# Small -> large: ~2.8M, 8.2M, 12.5M, 11.7M, 20.1M params (head dominates the total).
+backbones = ["small_cnn", "mobilenetv3_small", "mobilenetv3_large", "efficientnet_lite_b0", "efficientnet_lite_b4"]
 image_sizes = [64, 128]
