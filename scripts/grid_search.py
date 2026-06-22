@@ -30,6 +30,13 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--config", type=Path, default=Path("configs/runs/grid.toml"))
     p.add_argument("--output", type=Path, default=None, help="results CSV (default <out_dir>/results.csv)")
     p.add_argument("--runs", type=int, default=20, help="timed forward passes per benchmark")
+    p.add_argument(
+        "--max-steps",
+        type=int,
+        default=None,
+        help="cap train+val batches per epoch (bounds each point; ranking stabilizes early). "
+        "Full epochs over the whole set when omitted.",
+    )
     return p.parse_args()
 
 
@@ -55,7 +62,7 @@ def main() -> None:
                 cfg.log.out_dir = f"{base.log.out_dir}/{backbone}_{size}"
                 cfg.log.mlflow = False  # the grid logs its own runs below (one per point)
                 print(f"\n=== {backbone} @ {size}x{size} ===")
-                result = train_from_config(cfg, device)
+                result = train_from_config(cfg, device, max_steps=args.max_steps)
 
                 example = torch.randint(0, 256, (1, cfg.data.in_channels, size, size)).float()
                 accuracy = evaluate_accuracy(result.model, result.val_loader, CPU)
