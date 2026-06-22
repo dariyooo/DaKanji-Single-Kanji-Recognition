@@ -6,8 +6,9 @@ default, or an int8 ``.pte`` via the ExecuTorch runtime with ``--pte``. Defaults
 ``val_root`` of the run config (the dedicated validation set), separate from the
 in-training split.
 
-    uv run python scripts/evaluate.py --config configs/runs/kanji.toml
-    uv run python scripts/evaluate.py --config configs/runs/kanji.toml --pte outputs/exports/model_xnnpack.pte
+    uv run python scripts/evaluate.py --config configs/runs/kanji_efficientnet_lite_b0.toml
+    uv run python scripts/evaluate.py --config configs/runs/kanji_efficientnet_lite_b0.toml \
+        --pte outputs/exports/model_xnnpack.pte
 """
 
 from __future__ import annotations

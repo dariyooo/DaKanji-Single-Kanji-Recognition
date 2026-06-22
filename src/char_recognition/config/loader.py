@@ -40,9 +40,9 @@ def load_config(path: str | Path) -> Config:
     """Load a run config from ``configs/runs/<name>.toml``.
 
     A run config holds the training recipe inline: ``model`` (a backbone name, or a
-    ``[model]`` table) plus ``[optim]`` and ``[augment]`` tables. It references the two
-    reusable, environment-specific parts by name: ``data`` and ``log`` load
-    ``configs/data/<name>.toml`` / ``configs/log/<name>.toml``. Anything omitted uses defaults.
+    ``[model]`` table) plus ``[optim]``, ``[augment]`` and ``[log]`` tables. ``data`` is the
+    only part referenced by name from a reusable, environment-specific fragment, loaded from
+    ``configs/data/<name>.toml``. Anything omitted uses defaults.
     """
     import tomllib
 
@@ -72,7 +72,7 @@ def load_config(path: str | Path) -> Config:
 
     return Config(
         data=referenced("data", DataConfig, ("image_size",)),
-        log=referenced("log", LogConfig),
+        log=inline("log", LogConfig),
         model=model(),
         optim=inline("optim", OptimConfig),
         augment=inline("augment", AugmentConfig, ("cutout_scale", "cutout_ratio", "blur_sigma")),

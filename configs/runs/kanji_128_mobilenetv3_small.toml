@@ -1,0 +1,34 @@
+# MobileNetV3-Small on 128x128 Kanji - a lighter alternative to EfficientNet-Lite.
+# Inline recipe; `data` references configs/data/kanji_128.toml.
+device = "auto"
+data = "kanji_128"   # -> configs/data/kanji_128.toml
+
+model = "mobilenetv3_small"
+
+[optim]
+lr = 0.001
+weight_decay = 1e-5
+epochs = 100
+scheduler = "cosine"
+warmup_epochs = 3
+amp = true
+label_smoothing = 0.0
+
+[augment]
+shear_degrees = 10.0
+sharpness_factor = 2.0
+sharpness_p = 0.3
+cutout_p = 0.3
+cutout_scale = [0.02, 0.4]
+cutout_ratio = [0.3, 3.3]
+stroke_p = 0.4          # thin/thicken strokes: robust to thin handwriting vs thick rendered data
+blur_p = 0.4            # soften strokes (replaces the app's inference-time blur)
+blur_sigma = [0.1, 1.5]
+mixup_alpha = 0.2
+cutmix_alpha = 1.0
+use_cutmix = false      # halving a glyph destroys its identity -> MixUp only
+mix_p = 0.2
+
+[log]
+out_dir = "runs"
+mlflow = true

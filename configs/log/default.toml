@@ -1,2 +1,0 @@
-out_dir = "runs"
-mlflow = true

@@ -22,16 +22,16 @@ them — [configs/data/kanji.toml](configs/data/kanji.toml): `root` is the train
 uv run mlflow ui --backend-store-uri sqlite:///outputs/mlflow.db --port 5001   # http://127.0.0.1:5001
 
 # 1. Train the fp32 model (90/10 split; writes outputs/runs/best.pt, logs to MLflow)
-uv run python scripts/train.py --config configs/runs/kanji.toml --epochs 30
+uv run python scripts/train.py --config configs/runs/kanji_efficientnet_lite_b0.toml --epochs 30
 
 # 2. Evaluate fp32 on the held-out set (top-1/5/10 + outputs/eval/predictions.png grid)
-uv run python scripts/evaluate.py --config configs/runs/kanji.toml --from outputs/runs/best.pt
+uv run python scripts/evaluate.py --config configs/runs/kanji_efficientnet_lite_b0.toml --from outputs/runs/best.pt
 
 # 3. Quantize + QAT fine-tune -> int8 XNNPACK .pte (outputs/exports/model_xnnpack.pte)
-uv run python scripts/quantize.py --config configs/runs/kanji.toml --from outputs/runs/best.pt --qat-epochs 8 --lr 1e-5
+uv run python scripts/quantize.py --config configs/runs/kanji_efficientnet_lite_b0.toml --from outputs/runs/best.pt --qat-epochs 8 --lr 1e-5
 
 # 4. Evaluate the int8 .pte on the same held-out set (compare to step 2)
-uv run python scripts/evaluate.py --config configs/runs/kanji.toml --pte outputs/exports/model_xnnpack.pte
+uv run python scripts/evaluate.py --config configs/runs/kanji_efficientnet_lite_b0.toml --pte outputs/exports/model_xnnpack.pte
 
 # 5. Export the fp32 model to ONNX + ExecuTorch .pte (with PyTorch parity check)
 uv run python scripts/export.py --from outputs/runs/best.pt
@@ -58,7 +58,7 @@ uv run scripts/export_coreml.py --from outputs/runs/best.pt
 ## How it works
 
 1. A **run config** (`configs/runs/*.toml`) holds the training recipe inline (model,
-   optimizer, augmentation) and references reusable `data` / `log` fragments by name.
+   optimizer, augmentation, logging) and references one reusable `data` fragment by name.
 2. **Training** runs a custom PyTorch loop (AMP, schedules, MLflow logging, checkpoints),
    producing an fp32 checkpoint as the source of truth.
 3. **Quantization** (optional, stage 2) fine-tunes that checkpoint with **PT2E QAT** and

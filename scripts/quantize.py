@@ -4,9 +4,10 @@ PT2E Quantization-Aware *fine-tuning* (conv + linear, int8), lowered to an XNNPA
 ExecuTorch ``.pte`` that runs on CPU/ARM. The fp32 checkpoint stays the source of truth;
 this produces a derived, deployable artifact.
 
-    # Stage 1 (elsewhere): uv run python scripts/train.py --config configs/runs/kanji.toml
+    # Stage 1: uv run python scripts/train.py --config configs/runs/kanji_efficientnet_lite_b0.toml
     # Stage 2:
-    uv run python scripts/quantize.py --config configs/runs/kanji.toml --qat-epochs 8 --lr 1e-5
+    uv run python scripts/quantize.py --config configs/runs/kanji_efficientnet_lite_b0.toml \
+        --qat-epochs 8 --lr 1e-5
 """
 
 from __future__ import annotations

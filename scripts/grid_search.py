@@ -1,8 +1,10 @@
-"""Grid search over model x input size (fp32), driven by a config.
+"""Grid search over backbone x input size (fp32), driven by a config.
 
-Trains each (backbone, image_size) and reports accuracy / latency / size: the tool for
-picking an architecture. Quantize the winner separately with `scripts/quantize.py`.
-Point `[data].root` at a dataset for meaningful numbers; otherwise it runs on synthetic.
+Trains and checkpoints each (backbone, image_size) point on the config's data, then reports
+accuracy / latency / size: the tool for picking an architecture. Each point is a real trained
+model at outputs/runs/grid/<backbone>_<size>/best.pt; quantize the winner with
+`scripts/quantize.py`. Every point logs its full hparams, per-epoch curves and final metrics to
+MLflow, and the ranked results.csv is logged as an artifact.
 
     uv run python scripts/grid_search.py --config configs/runs/grid.toml
 """
@@ -46,7 +48,9 @@ def main() -> None:
         grid = tomllib.load(f).get("grid", {})
     base = load_config(args.config)
     device = resolve_device(base.device)
-    mlflow = setup_mlflow(base.log.mlflow_experiment) if base.log.mlflow else None
+    mlflow = (
+        setup_mlflow(base.log.mlflow_experiment, base.log.mlflow_tracking_uri) if base.log.mlflow else None
+    )
 
     backbones = grid.get("backbones", [base.model.name])
     sizes = grid.get("image_sizes", [base.data.image_size[0]])
@@ -60,7 +64,7 @@ def main() -> None:
                 cfg.model.name = backbone
                 cfg.data.image_size = (size, size)
                 cfg.log.out_dir = f"{base.log.out_dir}/{backbone}_{size}"
-                cfg.log.mlflow = False  # the grid logs its own runs below (one per point)
+                cfg.log.mlflow = False  # the grid owns one richer MLflow run per point (below)
                 print(f"\n=== {backbone} @ {size}x{size} ===")
                 result = train_from_config(cfg, device, max_steps=args.max_steps)
 
@@ -76,7 +80,7 @@ def main() -> None:
                     "params": params,
                     "error": "",
                 }
-                _log_point(mlflow, row)
+                _log_point(mlflow, cfg, result, row)
                 print(f"  acc={accuracy:.3f} lat={latency_ms:.2f}ms size={size_mb:.2f}MB")
             except Exception as exc:  # a single point failing must not abort the grid
                 row |= {
@@ -89,17 +93,49 @@ def main() -> None:
                 print(f"  ERROR {type(exc).__name__}: {exc}")
             rows.append(row)
 
-    _write_results(rows, args.output or resolve_output(base.log.out_dir) / "results.csv")
+    output_path = args.output or resolve_output(base.log.out_dir) / "results.csv"
+    _write_results(rows, output_path)
+    _log_summary(mlflow, output_path)
 
 
-def _log_point(mlflow, row: dict) -> None:
-    """Log one grid point (params + accuracy/latency/size) to MLflow."""
+_EPOCH_KEYS = ("train_loss", "train_acc", "val_loss", "val_acc", "lr")
+
+
+def _flatten(d: dict, parent: str = "") -> dict:
+    """Nested config dict -> dotted keys, e.g. {'optim': {'lr': 1e-3}} -> {'optim.lr': 1e-3}."""
+    flat: dict = {}
+    for key, value in d.items():
+        name = f"{parent}.{key}" if parent else key
+        flat.update(_flatten(value, name) if isinstance(value, dict) else {name: value})
+    return flat
+
+
+def _log_point(mlflow, cfg, result, row: dict) -> None:
+    """One MLflow run per grid point: every hparam, the per-epoch curves, and final metrics."""
     if mlflow is None:
         return
-    run_name = f"{row['backbone']}_{row['image_size']}"
-    with mlflow.start_run(run_name=run_name):
-        mlflow.log_params({k: row[k] for k in ("backbone", "image_size", "params")})
-        mlflow.log_metrics({k: row[k] for k in ("accuracy", "latency_ms", "size_mb")})
+    with mlflow.start_run(run_name=f"{row['backbone']}_{row['image_size']}"):
+        mlflow.log_params(_flatten(cfg.to_dict()))  # full recipe: model/optim/augment/data/log
+        history = result.history
+        for epoch in range(len(history.val_acc)):  # replay the training curves
+            mlflow.log_metrics({f"epoch/{k}": getattr(history, k)[epoch] for k in _EPOCH_KEYS}, step=epoch)
+        mlflow.log_metrics(
+            {
+                "val_accuracy": row["accuracy"],
+                "latency_ms": row["latency_ms"],
+                "size_mb": row["size_mb"],
+                "params": row["params"],
+            }
+        )
+        mlflow.set_tag("checkpoint", str(result.run_dir / "best.pt"))  # real trained model on disk
+
+
+def _log_summary(mlflow, results_path: Path) -> None:
+    """Log the ranked results.csv as an artifact under one summary run."""
+    if mlflow is None:
+        return
+    with mlflow.start_run(run_name="grid-summary"):
+        mlflow.log_artifact(str(results_path))
 
 
 def _write_results(rows: list[dict], output: Path) -> None:

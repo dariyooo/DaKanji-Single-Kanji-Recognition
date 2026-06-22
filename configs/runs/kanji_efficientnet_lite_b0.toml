@@ -1,0 +1,36 @@
+# EfficientNet-Lite B0 on the Kanji dataset. Set your dataset path in configs/data/kanji.toml.
+# A run config is a fully inline recipe (model + optim + augment + log); `data` is the only
+# part referenced by name from a reusable fragment (configs/data/<name>.toml).
+device = "auto"
+data = "kanji"   # the one fragment reference -> configs/data/kanji.toml (edit `root` there)
+
+model = "efficientnet_lite_b0"   # backbone registry name (inline recipe from here down)
+
+[optim]
+lr = 0.001
+weight_decay = 1e-5
+epochs = 10
+scheduler = "cosine"
+warmup_epochs = 3
+amp = true
+label_smoothing = 0.0
+# grad_clip omitted -> no gradient clipping
+
+[augment]
+shear_degrees = 10.0
+sharpness_factor = 2.0
+sharpness_p = 0.3
+cutout_p = 0.3
+cutout_scale = [0.02, 0.4]
+cutout_ratio = [0.3, 3.3]
+stroke_p = 0.4          # thin/thicken strokes: robust to thin handwriting vs thick rendered data
+blur_p = 0.4            # soften strokes (replaces the app's inference-time blur)
+blur_sigma = [0.1, 1.5]
+mixup_alpha = 0.2
+cutmix_alpha = 1.0
+use_cutmix = false      # halving a glyph destroys its identity -> MixUp only
+mix_p = 0.2
+
+[log]
+out_dir = "runs"
+mlflow = true

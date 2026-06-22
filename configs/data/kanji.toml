@@ -2,5 +2,5 @@ root = "data/kanji/dakanji_single_kanji_cnn_train_test"          # root/<class_i
 val_root = "data/kanji/dakanji_single_kanji_cnn_validation"      # held-out set for scripts/evaluate.py
 image_size = [64, 64]
 val_split = 0.1            # 90/10 train/val split of `root` during training
-batch_size = 2048
+batch_size = 512
 num_workers = 8

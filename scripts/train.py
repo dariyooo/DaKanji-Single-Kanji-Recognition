@@ -9,7 +9,7 @@ Examples:
     uv run python scripts/train.py --synthetic --classes 20 --epochs 3
 
 Or load a run config directly:
-    uv run python scripts/train.py --config configs/runs/kanji.toml
+    uv run python scripts/train.py --config configs/runs/kanji_efficientnet_lite_b0.toml
 """
 
 from __future__ import annotations
