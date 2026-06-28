@@ -108,7 +108,8 @@ class Trainer:
     ) -> dict[str, float]:
         self.model.train()
         running_loss, correct, seen = 0.0, 0, 0
-        progress = tqdm(loader, desc=f"train {epoch + 1}/{epochs}", leave=False)
+        total = len(loader) if max_steps is None else min(max_steps, len(loader))  # bar honors the cap
+        progress = tqdm(loader, desc=f"train {epoch + 1}/{epochs}", leave=False, total=total)
         for step, (images, targets) in enumerate(progress):
             images = images.to(self.device, non_blocking=True)
             targets = targets.to(self.device, non_blocking=True)
@@ -131,7 +132,10 @@ class Trainer:
             seen += batch
             self._global_step += 1
             if self.logger is not None and self._global_step % self.log_every == 0:
-                self.logger.log_metrics({"step/train_loss": loss.item()}, self._global_step)
+                self.logger.log_metrics(
+                    {"step/train_loss": loss.item(), "step/train_acc": correct / seen},
+                    self._global_step,
+                )
             progress.set_postfix(loss=running_loss / seen, acc=correct / seen)
             if max_steps is not None and step + 1 >= max_steps:
                 break
@@ -142,7 +146,8 @@ class Trainer:
     def _validate(self, loader: DataLoader, max_steps: int | None = None) -> dict[str, float]:
         self.model.eval()
         running_loss, correct, seen = 0.0, 0, 0
-        for step, (images, targets) in enumerate(tqdm(loader, desc="val", leave=False)):
+        total = len(loader) if max_steps is None else min(max_steps, len(loader))  # bar honors the cap
+        for step, (images, targets) in enumerate(tqdm(loader, desc="val", leave=False, total=total)):
             images = images.to(self.device, non_blocking=True)
             targets = targets.to(self.device, non_blocking=True)
             with torch.autocast(device_type=self.device.type, dtype=self.amp_dtype, enabled=self.amp_enabled):
