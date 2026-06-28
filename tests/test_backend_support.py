@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 import torch
 
-from char_recognition.models import CharRecognizer, ProbabilityModel
+from char_recognition.models.recognizer import CharRecognizer, ProbabilityModel
 
 
 def test_xnnpack_int8_lowers_and_runs() -> None:
@@ -16,10 +16,9 @@ def test_xnnpack_int8_lowers_and_runs() -> None:
     pytest.importorskip("executorch")
     from executorch.runtime import Runtime
 
-    from char_recognition.export import export_xnnpack
     from char_recognition.export.loading import CAPTURE_CHANNELS
-    from char_recognition.optimize import convert_quantized, prepare_xnnpack
-    from char_recognition.optimize.pt2e import CAPTURE_BATCH
+    from char_recognition.export.xnnpack import export_xnnpack
+    from char_recognition.optimize.pt2e import CAPTURE_BATCH, convert_quantized, prepare_xnnpack
 
     # Probability model captured up front (softmax in the graph); PTQ for test speed.
     model = ProbabilityModel(CharRecognizer(8, backbone="tiny_cnn", image_size=(64, 64)))
@@ -52,7 +51,7 @@ def test_xnnpack_onnx_provider_runs() -> None:
     if "XnnpackExecutionProvider" not in ort.get_available_providers():
         pytest.skip("this onnxruntime build has no XNNPACK execution provider")
 
-    from char_recognition.export import export_onnx
+    from char_recognition.export.onnx import export_onnx
 
     model = CharRecognizer(8, backbone="tiny_cnn", image_size=(64, 64))
     with tempfile.TemporaryDirectory() as tmp:

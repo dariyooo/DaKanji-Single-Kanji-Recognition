@@ -4,15 +4,11 @@ from __future__ import annotations
 
 import torch
 
-from char_recognition.config import Config
-from char_recognition.data import (
-    AugmentedDataset,
-    RandomCharDataset,
-    build_dataloaders,
-    build_mix_collate,
-    build_train_transform,
-    random_split,
-)
+from char_recognition.config.loader import Config
+from char_recognition.data.augment import build_mix_collate, build_train_transform
+from char_recognition.data.augmented_dataset import AugmentedDataset
+from char_recognition.data.dataset_utils import build_dataloaders, random_split
+from char_recognition.data.synthetic import RandomCharDataset
 
 
 def test_synthetic_dataset_shape() -> None:

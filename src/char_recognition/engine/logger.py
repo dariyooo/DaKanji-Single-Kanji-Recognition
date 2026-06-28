@@ -12,7 +12,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from char_recognition.config import LogConfig
+from char_recognition.config.log import LogConfig
 
 if TYPE_CHECKING:  # pragma: no cover
     from matplotlib.figure import Figure

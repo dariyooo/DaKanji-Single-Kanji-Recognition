@@ -14,7 +14,7 @@ from torch.optim.lr_scheduler import (
     SequentialLR,
 )
 
-from char_recognition.config import OptimConfig
+from char_recognition.config.optim import OptimConfig
 
 __all__ = ["build_criterion", "build_optimizer", "build_scheduler"]
 

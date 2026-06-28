@@ -14,28 +14,9 @@ from torch import Tensor
 from torch.utils.data import DataLoader, Dataset, Subset
 from torch.utils.data import random_split as _torch_random_split
 
-from char_recognition.config import DataConfig
+from char_recognition.config.data import DataConfig
 
-__all__ = ["AugmentedDataset", "build_dataloaders", "random_split"]
-
-Transform = Callable[[Tensor], Tensor]
-
-
-class AugmentedDataset(Dataset[tuple[Tensor, int]]):
-    """Applies a per-sample transform on top of a base dataset/subset."""
-
-    def __init__(self, base: Dataset, transform: Transform | None) -> None:
-        self.base = base
-        self.transform = transform
-
-    def __len__(self) -> int:
-        return len(self.base)  # type: ignore[arg-type]
-
-    def __getitem__(self, index: int) -> tuple[Tensor, int]:
-        image, target = self.base[index]
-        if self.transform is not None:
-            image = self.transform(image)
-        return image, target
+__all__ = ["build_dataloaders", "random_split"]
 
 
 def random_split(dataset: Dataset, val_split: float, seed: int) -> tuple[Subset, Subset]:

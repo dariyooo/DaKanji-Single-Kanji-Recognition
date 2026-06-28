@@ -15,7 +15,7 @@ from torch.optim.lr_scheduler import LRScheduler
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
-from char_recognition.config import OptimConfig
+from char_recognition.config.optim import OptimConfig
 from char_recognition.engine.checkpoint import CheckpointManager
 from char_recognition.engine.logger import MetricLogger
 

@@ -13,13 +13,10 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from char_recognition.export import (
-    export_executorch,
-    export_onnx,
-    export_vulkan,
-    load_recognizer,
-    onnx_parity,
-)
+from char_recognition.export.executorch import export_executorch
+from char_recognition.export.gpu import export_vulkan
+from char_recognition.export.loading import load_recognizer
+from char_recognition.export.onnx import export_onnx, onnx_parity
 from char_recognition.paths import EXPORTS_DIR, RUNS_DIR
 
 

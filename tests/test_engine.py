@@ -6,22 +6,15 @@ import tempfile
 
 import torch
 
-from char_recognition.config import Config
-from char_recognition.data import (
-    AugmentedDataset,
-    RandomCharDataset,
-    build_dataloaders,
-    build_train_transform,
-    random_split,
-)
-from char_recognition.engine import (
-    Trainer,
-    build_criterion,
-    build_optimizer,
-    build_scheduler,
-    train_from_config,
-)
-from char_recognition.models import CharRecognizer
+from char_recognition.config.loader import Config
+from char_recognition.data.augment import build_train_transform
+from char_recognition.data.augmented_dataset import AugmentedDataset
+from char_recognition.data.dataset_utils import build_dataloaders, random_split
+from char_recognition.data.synthetic import RandomCharDataset
+from char_recognition.engine.optim import build_criterion, build_optimizer, build_scheduler
+from char_recognition.engine.runner import train_from_config
+from char_recognition.engine.trainer import Trainer
+from char_recognition.models.recognizer import CharRecognizer
 
 DEVICE = torch.device("cpu")
 
@@ -73,7 +66,7 @@ def test_train_from_config_writes_checkpoint() -> None:
 
 def test_logger_failure_never_crashes() -> None:
     """A backend error must not propagate: the logger warns once and disables itself."""
-    from char_recognition.config import LogConfig
+    from char_recognition.config.log import LogConfig
     from char_recognition.engine.logger import MetricLogger
 
     class _Boom:

@@ -21,9 +21,10 @@ import torch
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
-from char_recognition.config import Config, load_config, resolve_device
-from char_recognition.data import CharFolderDataset, canonical_class_map, load_labels
-from char_recognition.export import load_recognizer
+from char_recognition.config.loader import Config, load_config, resolve_device
+from char_recognition.data.dataset import CharFolderDataset, canonical_class_map
+from char_recognition.data.labels import load_labels
+from char_recognition.export.loading import load_recognizer
 from char_recognition.paths import JP_FONT, resolve_output
 
 Predictor = Callable[[torch.Tensor], torch.Tensor]  # raw image batch -> class probabilities
@@ -32,13 +33,19 @@ Predictor = Callable[[torch.Tensor], torch.Tensor]  # raw image batch -> class p
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--config", type=Path, required=True, help="run config (for labels + val_root)")
-    p.add_argument("--from", dest="ckpt", type=Path, default=None, help="checkpoint (default <out_dir>/best.pt)")
-    p.add_argument("--pte", type=Path, default=None, help="evaluate an int8 .pte (ExecuTorch runtime) instead")
+    p.add_argument(
+        "--from", dest="ckpt", type=Path, default=None, help="checkpoint (default <out_dir>/best.pt)"
+    )
+    p.add_argument(
+        "--pte", type=Path, default=None, help="evaluate an int8 .pte (ExecuTorch runtime) instead"
+    )
     p.add_argument("--root", type=Path, default=None, help="eval dataset root (default data.val_root)")
     p.add_argument("--batch-size", type=int, default=256)
     p.add_argument("--num-workers", type=int, default=8)
     p.add_argument("--grid", type=int, default=10, help="render an NxN prediction grid (0 to skip)")
-    p.add_argument("--output", type=Path, default=None, help="grid image path (default outputs/eval/predictions.png)")
+    p.add_argument(
+        "--output", type=Path, default=None, help="grid image path (default outputs/eval/predictions.png)"
+    )
     return p.parse_args()
 
 

@@ -17,8 +17,8 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from char_recognition.config import Config, load_config, resolve_device
-from char_recognition.engine import train_from_config
+from char_recognition.config.loader import Config, load_config, resolve_device
+from char_recognition.engine.runner import train_from_config
 
 
 def parse_args() -> argparse.Namespace:

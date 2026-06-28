@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from torch import Tensor, nn
 
-from char_recognition.config import DataConfig, ModelConfig
+from char_recognition.config.data import DataConfig
+from char_recognition.config.model import ModelConfig
 from char_recognition.models.preprocessing import Preprocess
 from char_recognition.models.registry import build_backbone
 

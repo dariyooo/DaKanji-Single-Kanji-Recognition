@@ -7,9 +7,9 @@ from pathlib import Path
 
 import torch
 
-from char_recognition.engine import CheckpointManager, build_checkpoint_meta
-from char_recognition.export import load_recognizer
-from char_recognition.models import CharRecognizer
+from char_recognition.engine.checkpoint import CheckpointManager, build_checkpoint_meta
+from char_recognition.export.loading import load_recognizer
+from char_recognition.models.recognizer import CharRecognizer
 
 
 def test_checkpoint_roundtrip_and_deploy() -> None:

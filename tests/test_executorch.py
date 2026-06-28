@@ -8,15 +8,15 @@ from pathlib import Path
 import pytest
 import torch
 
-from char_recognition.models import CharRecognizer
+from char_recognition.models.recognizer import CharRecognizer
 
 
 def test_executorch_export_runtime() -> None:
     pytest.importorskip("executorch")
     from executorch.runtime import Runtime
 
-    from char_recognition.export import export_executorch
-    from char_recognition.models import ProbabilityModel
+    from char_recognition.export.executorch import export_executorch
+    from char_recognition.models.recognizer import ProbabilityModel
 
     model = CharRecognizer(8, backbone="tiny_cnn", image_size=(64, 64)).eval()
     reference = ProbabilityModel(model).eval()

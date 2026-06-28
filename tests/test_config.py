@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from char_recognition.config import load_config
+from char_recognition.config.loader import load_config
 from char_recognition.paths import CONFIGS_DIR
 
 

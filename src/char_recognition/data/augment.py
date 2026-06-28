@@ -15,7 +15,7 @@ from torch.nn import functional as F
 from torch.utils.data import default_collate
 from torchvision.transforms import v2
 
-from char_recognition.config import AugmentConfig
+from char_recognition.config.augment import AugmentConfig
 
 Batch = tuple[Tensor, Tensor]
 

@@ -5,7 +5,8 @@ from __future__ import annotations
 import pytest
 import torch
 
-from char_recognition.models import CharRecognizer, available_backbones
+from char_recognition.models.recognizer import CharRecognizer
+from char_recognition.models.registry import available_backbones
 
 
 @pytest.mark.parametrize("backbone", available_backbones())

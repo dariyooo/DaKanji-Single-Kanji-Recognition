@@ -41,9 +41,9 @@ def _():
     import matplotlib.pyplot as plt
     import torch
 
-    from char_recognition.config import list_configs, load_config, resolve_device
-    from char_recognition.engine import train_from_config
-    from char_recognition.models import available_backbones
+    from char_recognition.config.loader import list_configs, load_config, resolve_device
+    from char_recognition.engine.runner import train_from_config
+    from char_recognition.models.registry import available_backbones
     from char_recognition.paths import JP_FONT
 
     return (

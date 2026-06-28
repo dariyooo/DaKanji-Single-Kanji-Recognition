@@ -20,9 +20,10 @@ from typing import Any
 
 import torch
 
-from char_recognition.config import load_config, resolve_device
-from char_recognition.engine import evaluate_accuracy, setup_mlflow, train_from_config
-from char_recognition.optimize import benchmark_model
+from char_recognition.config.loader import load_config, resolve_device
+from char_recognition.engine.logger import setup_mlflow
+from char_recognition.engine.runner import evaluate_accuracy, train_from_config
+from char_recognition.optimize.benchmark import benchmark_model
 from char_recognition.paths import resolve_output
 
 CPU = torch.device("cpu")

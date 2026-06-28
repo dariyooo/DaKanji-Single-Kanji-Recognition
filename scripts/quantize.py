@@ -23,19 +23,15 @@ from torch.fx import GraphModule
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from char_recognition.config import load_config
-from char_recognition.engine import (
-    MetricLogger,
-    Trainer,
-    build_optimizer,
-    build_scheduler,
-    prepare_data,
-)
-from char_recognition.export import example_input, export_xnnpack, load_recognizer
-from char_recognition.export.loading import CAPTURE_CHANNELS
-from char_recognition.models import ProbabilityModel
-from char_recognition.optimize import convert_quantized, prepare_xnnpack
-from char_recognition.optimize.pt2e import CAPTURE_BATCH
+from char_recognition.config.loader import load_config
+from char_recognition.engine.logger import MetricLogger
+from char_recognition.engine.optim import build_optimizer, build_scheduler
+from char_recognition.engine.runner import prepare_data
+from char_recognition.engine.trainer import Trainer
+from char_recognition.export.loading import CAPTURE_CHANNELS, example_input, load_recognizer
+from char_recognition.export.xnnpack import export_xnnpack
+from char_recognition.models.recognizer import ProbabilityModel
+from char_recognition.optimize.pt2e import CAPTURE_BATCH, convert_quantized, prepare_xnnpack
 from char_recognition.paths import EXPORTS_DIR, resolve_output
 
 

@@ -54,7 +54,9 @@ def canonical_class_map(root: str | Path, labels: Sequence[str]) -> dict[str, in
     canonical = {char: index for index, char in enumerate(labels)}
     missing = sorted({ch for ch in folder_to_char.values() if ch not in canonical})
     if missing:
-        raise ValueError(f"{len(missing)} chars in {encoding} are not in the labels file (e.g. {missing[:3]})")
+        raise ValueError(
+            f"{len(missing)} chars in {encoding} are not in the labels file (e.g. {missing[:3]})"
+        )
     return {folder: canonical[char] for folder, char in folder_to_char.items()}
 
 

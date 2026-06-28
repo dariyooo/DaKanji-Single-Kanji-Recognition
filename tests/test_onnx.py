@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from char_recognition.models import CharRecognizer
+from char_recognition.models.recognizer import CharRecognizer
 
 
 def test_onnx_export_dynamic_shapes() -> None:
@@ -15,7 +15,7 @@ def test_onnx_export_dynamic_shapes() -> None:
     ort = pytest.importorskip("onnxruntime")
     import numpy as np
 
-    from char_recognition.export import export_onnx
+    from char_recognition.export.onnx import export_onnx
 
     model = CharRecognizer(8, backbone="tiny_cnn", image_size=(64, 64)).eval()
     with tempfile.TemporaryDirectory() as tmp:
@@ -33,7 +33,7 @@ def test_onnx_parity_matches_pytorch() -> None:
     pytest.importorskip("onnx")
     pytest.importorskip("onnxruntime")
 
-    from char_recognition.export import export_onnx, onnx_parity
+    from char_recognition.export.onnx import export_onnx, onnx_parity
 
     model = CharRecognizer(8, backbone="tiny_cnn", image_size=(64, 64)).eval()
     with tempfile.TemporaryDirectory() as tmp:

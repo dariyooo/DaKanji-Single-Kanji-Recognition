@@ -10,23 +10,18 @@ from torch import Tensor, nn
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
-from char_recognition.config import Config
-from char_recognition.data import (
-    AugmentedDataset,
-    CharFolderDataset,
-    RandomCharDataset,
-    build_dataloaders,
-    build_mix_collate,
-    build_train_transform,
-    canonical_class_map,
-    load_labels,
-    random_split,
-)
+from char_recognition.config.loader import Config
+from char_recognition.data.augment import build_mix_collate, build_train_transform
+from char_recognition.data.augmented_dataset import AugmentedDataset
+from char_recognition.data.dataset import CharFolderDataset, canonical_class_map
+from char_recognition.data.dataset_utils import build_dataloaders, random_split
+from char_recognition.data.labels import load_labels
+from char_recognition.data.synthetic import RandomCharDataset
 from char_recognition.engine.checkpoint import CheckpointManager, build_checkpoint_meta
 from char_recognition.engine.logger import MetricLogger
 from char_recognition.engine.optim import build_criterion, build_optimizer, build_scheduler
 from char_recognition.engine.trainer import Trainer, TrainHistory
-from char_recognition.models import CharRecognizer
+from char_recognition.models.recognizer import CharRecognizer
 from char_recognition.paths import resolve_output
 
 __all__ = ["TrainingResult", "evaluate_accuracy", "prepare_data", "train_from_config"]
