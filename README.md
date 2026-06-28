@@ -1,15 +1,47 @@
 # DaKanji: Single Character Recognition
 
+A small, fast CNN that takes a **grayscale image of any size** and returns character probabilities.
 Recognize a single handwritten or printed Japanese character (**Kanji, Hiragana, or
 Katakana**) from a drawing. The pipeline is language-agnostic, so with your own data it
 works for other scripts (e.g. Chinese) too.
 
 <img src="https://user-images.githubusercontent.com/51273483/233300113-502930e9-dcac-4f54-b522-9e186906da14.gif" style="display:block;margin-left:auto;margin-right:auto;" width="25%"/>
 
-A small, fast CNN that takes a **grayscale image of any size** and
-returns class probabilities aligned with [`labels.txt`](labels.txt). Resize + normalize
-are baked **into the model**, so it deploys to ONNX / ExecuTorch with zero preprocessing
-code in your app (TF lite models are now deprecated, revert to a previous release for them).
+This is the complete v2 rewrite of this project where I applied all my learnings from the last
+years.
+
+* Data agnostic: model for Japanese / Chinese / Korean / ...
+* Preprocessing in the model: No more tedious image handling in app code, everything as high-performance Tensor operations
+* Latest frameworks: Uses Torch + MLflow + Marimo for dev and ONNX + ExecuTorch for Deployment
+* Real model comparison: Benchmarked Custom CNN / MobileNet / EffNet Lite on accuracy and latency
+* Proper optimization: Latest quantization and tuned embedding size
+* Result: A tiny custom CNN (<3MB) with sub millisecond latency (0.8ms on m5 max)
+
+Results of initial trainig
+
+| backbone (fp32) | size | acc | latency(ms) | size(MB) |
+|---|---|---|---|---|
+| efficientnet_lite_b4 | 64 | 0.997 | 402.15 | 80.88 |
+| **small_cnn** | **64** | **0.995** | **0.74** | **11.40** |
+| mobilenetv3_large | 64 | 0.995 | 59.50 | 50.35 |
+| efficientnet_lite_b0 | 64 | 0.992 | 142.36 | 47.09 |
+| mobilenetv3_small | 64 | 0.990 | 52.87 | 32.88 |
+
+Results of embedding tuning
+
+| head_rank | acc | latency(ms) | size(MB) | params(M) |
+|---|---|---|---|---|
+| 256 | 0.995 | 0.74 | 11.67 | 2.91 |
+| 192 | 0.995 | 0.90 | 9.94 | 2.48 |
+| **128** | **0.995** | **0.85** | **8.20** | **2.04** |
+| 96 | 0.994 | 0.72 | 7.34 | 1.83 |
+| 64 | 0.993 | 0.72 | 6.47 | 1.61 |
+
+Results of quantization
+
+| quant scheme | acc | latency(ms) | size(MB) | params(M) |
+|---|---|---|---|---|
+| int8 | | | | |
 
 ## Quick start
 
@@ -45,7 +77,7 @@ fp32 eval — point `--root` at a subset for a quick check.)
 
 ```bash
 # Sweep backbone x input size (fp32) to pick an architecture; results -> CSV + MLflow
-uv run python scripts/grid_search.py --config configs/runs/grid.toml
+uv run python scripts/architecture_search.py --config configs/runs/grid.toml
 
 # Or experiment interactively (widgets for backbone / size / lr; logs to MLflow)
 uv run marimo edit notebooks/train.py
@@ -76,13 +108,13 @@ Output: probabilities `(B, num_classes)` aligned with `labels.txt`.
 
 | name | android | iOS | Linux | MacOS | Windows | Web |
 |:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| DaKanji | ✅ | ✅ | ✅ | ✅ | ✅ |   |
+| DaKanji (v4+) | ✅ | ✅ | ✅ | ✅ | ✅ |   |
 
 ## Usage in your software
 
 I put lots of effort and time into developing this model and hope that it can be used in many apps.
 If you decide to use this machine learning model please give me credit like:
-`Character recognition powered by machine learning from CaptainDario (DaAppLab)`
+`Character recognition powered by machine learning from Dariyooo (DaAppLab)`
 It would also be nice if you open an issue and tell me that you are using this model.
 Than I would add your software to the [apps section](#apps-which-use-this-model)
 
