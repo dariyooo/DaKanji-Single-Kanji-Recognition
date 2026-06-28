@@ -2,7 +2,7 @@
 
 Loads a base config from ``configs/`` and lets you tweak the key knobs with widgets.
 The effective config (base + overrides) is logged to MLflow, so interactive runs are
-still tracked. For systematic sweeps use ``scripts/grid_search.py`` instead.
+still tracked. For systematic searches use ``scripts/architecture_search.py`` instead.
 
     uv run marimo edit notebooks/train.py
 """
