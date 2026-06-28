@@ -28,6 +28,7 @@ def load_recognizer(checkpoint_path: str | Path, *, map_location: str = "cpu") -
         backbone=meta["backbone"],
         in_channels=meta["in_channels"],
         image_size=tuple(meta["image_size"]),
+        backbone_kwargs=meta.get("backbone_kwargs"),  # rebuild head_rank etc.; None for old checkpoints
     )
     model.load_state_dict(ckpt["model_state"])
     model.eval()

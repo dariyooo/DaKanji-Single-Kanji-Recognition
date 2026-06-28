@@ -8,6 +8,7 @@ from pathlib import Path
 import torch
 from torch import Tensor, nn
 from torch.utils.data import DataLoader, Dataset
+from tqdm import tqdm
 
 from char_recognition.config import Config
 from char_recognition.data import (
@@ -71,16 +72,18 @@ def prepare_data(cfg: Config, device: torch.device) -> tuple[DataLoader, DataLoa
 
 
 def train_from_config(
-    cfg: Config, device: torch.device, max_steps: int | None = None
+    cfg: Config, device: torch.device, max_steps: int | None = None, model: CharRecognizer | None = None
 ) -> TrainingResult:
     """Train an fp32 model from a config (logs to MLflow, writes checkpoints).
 
     ``max_steps`` caps batches per epoch for a quick check (e.g. one batch on a huge dataset).
-    Quantization is a separate Stage 2 (see ``scripts/quantize.py``).
+    ``model`` (optional) fine-tunes a pre-built model instead of building one from ``cfg.model``
+    (e.g. a modified checkpoint). Quantization is a separate Stage 2 (see ``scripts/quantize.py``).
     """
     train_loader, val_loader, labels, num_classes = prepare_data(cfg, device)
 
-    model = CharRecognizer.from_config(num_classes, cfg.model, cfg.data)
+    if model is None:
+        model = CharRecognizer.from_config(num_classes, cfg.model, cfg.data)
     optimizer = build_optimizer(model, cfg.optim)
     scheduler = build_scheduler(optimizer, cfg.optim)
     criterion = build_criterion(cfg.optim)
@@ -111,8 +114,10 @@ def evaluate_accuracy(model: nn.Module, loader: DataLoader, device: torch.device
     """Top-1 accuracy of ``model`` over ``loader``."""
     model.eval().to(device)
     correct = total = 0
-    for images, targets in loader:
+    progress = tqdm(loader, desc="eval", leave=False)
+    for images, targets in progress:
         preds = model(images.to(device)).argmax(dim=1)
         correct += (preds == targets.to(device)).sum().item()
         total += int(targets.numel())
+        progress.set_postfix(acc=correct / total)
     return correct / total

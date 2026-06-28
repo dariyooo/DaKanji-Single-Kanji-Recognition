@@ -36,10 +36,11 @@ class CharRecognizer(nn.Module):
         self.backbone_name = backbone
         self.in_channels = in_channels
         self.image_size = image_size
+        self.backbone_kwargs = dict(backbone_kwargs or {})  # persisted in meta so reload rebuilds it
 
         self.preprocess = Preprocess(image_size)
         self.backbone = build_backbone(
-            backbone, num_classes=num_classes, in_channels=in_channels, **(backbone_kwargs or {})
+            backbone, num_classes=num_classes, in_channels=in_channels, **self.backbone_kwargs
         )
 
     def forward(self, x: Tensor) -> Tensor:

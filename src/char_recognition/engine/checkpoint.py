@@ -25,6 +25,7 @@ def build_checkpoint_meta(model: CharRecognizer, labels: list[str] | None = None
         "backbone": model.backbone_name,
         "in_channels": model.in_channels,
         "image_size": list(model.image_size),
+        "backbone_kwargs": model.backbone_kwargs,
         "labels": labels,
     }
 

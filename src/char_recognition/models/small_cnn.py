@@ -5,13 +5,18 @@ downsampling stages, doubling channels each stage. Plain conv / batchnorm / ReLU
 keeps it friendly to int8 PT2E quantization and to every ExecuTorch backend. With ``width=32``
 the trunk is ~1M params; the 6507-class linear head dominates the total, as with the other
 backbones.
+
+``head_rank`` optionally factorizes that head into a low-rank bottleneck
+``Linear(feat, r) -> Linear(r, classes)``, which shrinks the dominant tensor (see
+``svd_init_factorized_head`` to seed it from a trained full head).
 """
 
 from __future__ import annotations
 
+import torch
 from torch import Tensor, nn
 
-__all__ = ["SmallCNN", "small_cnn"]
+__all__ = ["SmallCNN", "small_cnn", "svd_init_factorized_head"]
 
 
 def _conv_bn_act(in_ch: int, out_ch: int, stride: int = 1) -> nn.Sequential:
@@ -23,11 +28,19 @@ def _conv_bn_act(in_ch: int, out_ch: int, stride: int = 1) -> nn.Sequential:
 
 
 class SmallCNN(nn.Module):
-    """Strided stem, four (refine + downsample) stages, global pool, linear classifier."""
+    """Strided stem, four (refine + downsample) stages, global pool, linear (or low-rank) head."""
 
-    def __init__(self, num_classes: int, in_channels: int = 1, width: int = 32, dropout: float = 0.2) -> None:
+    def __init__(
+        self,
+        num_classes: int,
+        in_channels: int = 1,
+        width: int = 32,
+        dropout: float = 0.2,
+        head_rank: int | None = None,
+    ) -> None:
         super().__init__()
         w = width
+        self.head_rank = head_rank
         self.features = nn.Sequential(
             _conv_bn_act(in_channels, w, stride=2),  # stem, /2
             _conv_bn_act(w, w),
@@ -40,7 +53,12 @@ class SmallCNN(nn.Module):
         )
         self.pool = nn.AdaptiveAvgPool2d(1)
         self.dropout = nn.Dropout(dropout)
-        self.classifier = nn.Linear(w * 8, num_classes)
+        feat = w * 8
+        self.classifier: nn.Module = (
+            nn.Linear(feat, num_classes)
+            if head_rank is None
+            else nn.Sequential(nn.Linear(feat, head_rank, bias=False), nn.Linear(head_rank, num_classes))
+        )
 
     def forward(self, x: Tensor) -> Tensor:
         x = self.features(x)
@@ -48,5 +66,27 @@ class SmallCNN(nn.Module):
         return self.classifier(self.dropout(x))
 
 
-def small_cnn(num_classes: int, in_channels: int = 1, *, dropout: float = 0.2, **_: object) -> SmallCNN:
-    return SmallCNN(num_classes, in_channels=in_channels, dropout=dropout)
+def small_cnn(
+    num_classes: int, in_channels: int = 1, *, dropout: float = 0.2, head_rank: int | None = None, **_: object
+) -> SmallCNN:
+    return SmallCNN(num_classes, in_channels=in_channels, dropout=dropout, head_rank=head_rank)
+
+
+@torch.no_grad()
+def svd_init_factorized_head(full: nn.Module, factorized: nn.Module, rank: int) -> None:
+    """Seed a ``Linear(feat, r) -> Linear(r, classes)`` bottleneck with the rank-r SVD of ``full``.
+
+    ``full`` is the trained ``nn.Linear`` head and ``factorized`` the two-layer bottleneck.
+    ``full.weight`` is ``W [classes, feat]``; with ``W = U S Vt`` the bottleneck starts as the best
+    rank-r approximation: the first layer gets ``Vt[:r]`` and the second ``U[:, :r] * S[:r]``, so
+    one short fine-tune polishes the head instead of learning it from scratch.
+    """
+    assert isinstance(full, nn.Linear)
+    assert isinstance(factorized, nn.Sequential)
+    down, up = factorized[0], factorized[1]
+    assert isinstance(down, nn.Linear) and isinstance(up, nn.Linear)
+    u, s, vt = torch.linalg.svd(full.weight.data, full_matrices=False)  # u[classes,k], s[k], vt[k,feat]
+    down.weight.data.copy_(vt[:rank])  # [r, feat]
+    up.weight.data.copy_(u[:, :rank] * s[:rank])  # [classes, r]
+    if full.bias is not None and up.bias is not None:
+        up.bias.data.copy_(full.bias.data)
