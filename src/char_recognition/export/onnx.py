@@ -6,8 +6,9 @@ Uses the torch.export-based (dynamo) exporter.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import torch
 from torch import nn
@@ -15,7 +16,10 @@ from torch.export import Dim
 
 from char_recognition.export.loading import CAPTURE_CHANNELS, deployable_model, example_input
 
-__all__ = ["export_onnx", "onnx_parity"]
+if TYPE_CHECKING:
+    import numpy as np
+
+__all__ = ["export_onnx", "export_onnx_int8", "onnx_parity"]
 
 
 def export_onnx(
@@ -58,6 +62,45 @@ def export_onnx(
         raise RuntimeError("ONNX export produced no program")
     program.save(str(path))
     return path
+
+
+def export_onnx_int8(
+    fp32_path: str | Path,
+    out_path: str | Path,
+    calibration: Iterable[np.ndarray],
+) -> Path:
+    """Static int8 (QDQ, per-channel) quantization of an fp32 ONNX. Returns the written path.
+
+    ``calibration`` yields raw ``(1, C, H, W)`` float32 image batches; static quantization reads
+    them to estimate activation ranges, so feed a few hundred representative samples. Conv and
+    Gemm/MatMul are quantized (the whole trunk and head); the in-graph resize and RGB-to-gray
+    reduction stay fp32.
+    """
+    import numpy as np
+    import onnxruntime as ort
+    from onnxruntime.quantization import CalibrationDataReader, QuantFormat, QuantType, quantize_static
+
+    fp32_path, out_path = Path(fp32_path), Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    input_name = ort.InferenceSession(str(fp32_path)).get_inputs()[0].name
+
+    class _Reader(CalibrationDataReader):
+        def __init__(self) -> None:
+            self._it = iter({input_name: np.asarray(x, dtype=np.float32)} for x in calibration)
+
+        def get_next(self) -> dict | None:  # pyright: ignore[reportIncompatibleMethodOverride]
+            return next(self._it, None)
+
+    quantize_static(
+        str(fp32_path),
+        str(out_path),
+        _Reader(),
+        quant_format=QuantFormat.QDQ,
+        weight_type=QuantType.QInt8,
+        activation_type=QuantType.QInt8,
+        per_channel=True,
+    )
+    return out_path
 
 
 def onnx_parity(

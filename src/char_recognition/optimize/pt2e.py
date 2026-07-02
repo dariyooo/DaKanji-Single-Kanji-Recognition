@@ -49,7 +49,7 @@ def _xnnpack_quantizer(qat: bool) -> Any:
         get_symmetric_quantization_config,
     )
 
-    return XNNPACKQuantizer().set_global(get_symmetric_quantization_config(is_qat=qat))
+    return XNNPACKQuantizer().set_global(get_symmetric_quantization_config(is_qat=qat, is_per_channel=True))
 
 
 def prepare_xnnpack(model: nn.Module, example: tuple, *, qat: bool, dynamic: bool = True) -> nn.Module:

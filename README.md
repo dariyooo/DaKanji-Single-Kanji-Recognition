@@ -1,6 +1,6 @@
 # DaKanji: Single Character Recognition
 
-A small, fast CNN that takes a **grayscale image of any size** and returns character probabilities.
+A small, fast CNN that takes a **(grayscale) image of any size** and returns character probabilities.
 Recognize a single handwritten or printed Japanese character (**Kanji, Hiragana, or
 Katakana**) from a drawing. The pipeline is language-agnostic, so with your own data it
 works for other scripts (e.g. Chinese) too.
@@ -11,7 +11,7 @@ This is the complete v2 rewrite of this project where I applied all my learnings
 
 * Data agnostic: model for Japanese / Chinese / Korean / ...
 * Preprocessing in the model: No more tedious image handling in app code, everything as high-performance Tensor operations
-* Latest frameworks: Uses Torch + MLflow + Marimo for dev and ONNX + ExecuTorch for Deployment
+* Latest frameworks: Uses Torch + MLflow + Marimo for dev and ONNX / ExecuTorch for Deployment
 * Real model comparison: Benchmarked Custom CNN / MobileNet / EffNet Lite on accuracy and latency
 * Proper optimization: Latest quantization and tuned embedding size
 * Result: A tiny custom CNN (<3MB) with sub millisecond latency (~0.2ms on m5 max)
@@ -19,7 +19,7 @@ This is the complete v2 rewrite of this project where I applied all my learnings
 | backend | precision | latency(ms) | size(MB) |
 |---|---|---|---|
 | ExecuTorch portable (CPU) | fp32 | 36.60 | 8.20 |
-| XNNPACK (CPU) | int8 | 0.17 | 2.10 |
+| XNNPACK (CPU) | int8 | 0.15 | 2.16 |
 | CoreML (ANE/GPU/CPU) | fp16 | 0.15 | 4.20 |
 
 [Full results](#full-results)
@@ -66,6 +66,16 @@ uv run marimo edit notebooks/train.py
 # Apple CoreML .pte (ANE/GPU/CPU). Self-contained: uv pins an isolated torch 2.7 toolchain
 # from the script header, because the CoreML delegate miscompiles on the main torch 2.12 stack.
 uv run scripts/export_coreml.py --from outputs/runs/best.pt
+```
+
+### Packaging for the DaKanji app
+
+[`scripts/prepare_release_assets.py`](scripts/prepare_release_assets.py) bundles every exported
+artifact (the per-backend `.pte`, ONNX, and labels) into the release assets the app expects, and
+throws if any are missing:
+
+```bash
+uv run python scripts/prepare_release_assets.py   # -> outputs/release/
 ```
 
 ## How it works
@@ -115,14 +125,16 @@ Results of quantization (top-1/5/10 on a 20k val_root sample)
 |---|---|---|---|---|---|---|
 | fp32 | 0.9973 | 1.0000 | 1.0000 | 0.71 | 8.20 | 2.04 |
 | fp16 | 0.9972 | 1.0000 | 1.0000 | ~0.71 | 4.10 | 2.04 |
-| **int8** | **0.9877** | **0.9998** | **1.0000** | **0.17** | **2.10** | **2.04** |
+| **int8 (XNNPACK)** | **0.9948** | **1.0000** | **1.0000** | **0.15** | **2.16** | **2.04** |
+| int8 (ONNX) | 0.9965 | 1.0000 | 1.0000 | 0.15 | 2.23 | 2.04 |
 
 Backend comparison
 
 | backend | precision | latency(ms) | size(MB) |
 |---|---|---|---|
 | ExecuTorch portable (CPU) | fp32 | 36.60 | 8.20 |
-| XNNPACK (CPU) | int8 | 0.17 | 2.10 |
+| XNNPACK (CPU) | int8 | 0.15 | 2.16 |
+| ONNX Runtime (CPU) | int8 | 0.15 | 2.23 |
 | CoreML (ANE/GPU/CPU) | fp16 | 0.15 | 4.20 |
 
 ## Usage in your software
