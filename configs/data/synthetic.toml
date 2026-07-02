@@ -1,0 +1,4 @@
+synthetic_classes = 10
+image_size = [64, 64]
+batch_size = 64
+num_workers = 0

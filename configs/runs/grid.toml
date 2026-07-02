@@ -1,0 +1,39 @@
+# Grid search over backbone x image_size on REAL data (fp32). Each point is trained and
+# checkpointed (outputs/runs/grid/<backbone>_<size>/best.pt); quantize the winner with
+# quantize.py. `model` is omitted - the [grid] sweep sets it per point (see scripts/grid_search.py).
+device = "auto"
+data = "kanji"   # real data -> configs/data/kanji.toml (NOT synthetic)
+
+[optim]
+lr = 0.001
+weight_decay = 1e-5
+epochs = 5
+scheduler = "cosine"
+warmup_epochs = 1
+amp = true
+label_smoothing = 0.0
+
+[augment]
+shear_degrees = 10.0
+sharpness_factor = 2.0
+sharpness_p = 0.3
+cutout_p = 0.3
+cutout_scale = [0.02, 0.4]
+cutout_ratio = [0.3, 3.3]
+stroke_p = 0.4          # thin/thicken strokes: robust to thin handwriting vs thick rendered data
+blur_p = 0.4            # soften strokes (replaces the app's inference-time blur)
+blur_sigma = [0.1, 1.5]
+mixup_alpha = 0.2
+cutmix_alpha = 1.0
+use_cutmix = false      # halving a glyph destroys its identity -> MixUp only
+mix_p = 0.2
+
+[log]
+out_dir = "runs/grid"
+mlflow = true
+mlflow_experiment = "dakanji-grid"
+
+[grid]
+# Small -> large: ~2.8M, 8.2M, 12.5M, 11.7M, 20.1M params (head dominates the total).
+backbones = ["small_cnn", "mobilenetv3_small", "mobilenetv3_large", "efficientnet_lite_b0", "efficientnet_lite_b4"]
+image_sizes = [64]

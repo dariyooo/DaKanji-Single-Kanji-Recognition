@@ -1,0 +1,118 @@
+[project]
+name = "char-recognition"
+version = "2.0.0"
+description = "Generic single-character image recognition (Kanji/Hiragana/Katakana and beyond) with PyTorch and Marimo."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.11"
+authors = [{ name = "CaptainDario (DaAppLab)" }]
+keywords = ["pytorch", "ocr", "kanji", "efficientnet", "marimo", "executorch"]
+
+dependencies = [
+    "torch>=2.4",
+    "torchvision>=0.19",
+    "timm>=1.0",
+    "numpy>=1.26",
+    "matplotlib>=3.8",
+    "marimo>=0.9",
+    "tqdm>=4.66",
+    "mlflow>=2.14",  # manual logging in the training loop; local sqlite store under outputs/
+]
+
+[project.optional-dependencies]
+# TorchAO PT2E int8 quantization (stage 2; lowered to XNNPACK via executorch).
+optimize = ["torchao>=0.10"]
+# ONNX export + validation (onnxscript is required by torch's exporter).
+onnx = ["onnx>=1.16", "onnxruntime>=1.18", "onnxscript>=0.1"]
+# ExecuTorch on-device export. Platform/version sensitive (no wheel on some platforms).
+executorch = ["executorch>=0.4"]
+# Dev/test environment: tooling + every runtime extra the test suite exercises, so the full
+# suite runs without skips (a fresh `uv sync --extra dev` is enough; don't install ad hoc).
+dev = [
+    "char-recognition[optimize,onnx,executorch]",
+    "pytest>=8.0",
+    "ruff>=0.6",
+    "mypy>=1.11",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+char_recognition = ["py.typed"]
+
+[tool.uv]
+# Keep heavy / platform-specific extras out of the default sync; opt in explicitly.
+default-groups = []
+
+[tool.pytest.ini_options]
+# Collect only from tests/. Without this, pytest recurses the repo root (ignoring
+# .gitignore) and crawls data/ — millions of dataset files — which stalls every run.
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+src = ["src", "tests", "scripts"]
+extend-exclude = ["notebooks"]  # Marimo notebooks have their own formatting
+
+[tool.ruff.lint]
+select = [
+    "E", "W",   # pycodestyle
+    "F",        # pyflakes
+    "I",        # isort
+    "UP",       # pyupgrade
+    "B",        # flake8-bugbear
+    "C4",       # flake8-comprehensions
+    "SIM",      # flake8-simplify
+    "RUF",      # ruff-specific
+    "ANN",      # flake8-annotations (enforce type hints)
+    "TID",      # flake8-tidy-imports
+]
+ignore = [
+    "ANN401",   # allow explicit Any where genuinely needed
+    "B008",     # function calls in argument defaults (common in builders)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["ANN"]            # tests don't need full annotations
+"scripts/*" = ["ANN"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["char_recognition"]
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"  # absolute imports only
+
+[tool.mypy]
+python_version = "3.11"
+packages = ["char_recognition"]
+mypy_path = "src"
+# Strong but pragmatic: enforce annotations on our code without fighting the
+# incomplete type stubs that PyTorch/torchvision ship (which make full `strict`
+# noisy rather than useful).
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_return_any = false  # torch/torchvision ops are typed as Any upstream
+
+[[tool.mypy.overrides]]
+# Third-party libs that ship without type stubs.
+module = [
+    "torchvision.*",
+    "marimo.*",
+    "wandb.*",
+    "mlflow.*",
+    "torchao.*",
+    "executorch.*",
+    "onnxruntime.*",
+    "tqdm.*",
+]
+ignore_missing_imports = true

@@ -1,0 +1,20 @@
+# A run = a referenced data fragment + a fully inline recipe (model + optim + augment + log).
+# This one runs out of the box on random synthetic data - no dataset needed.
+device = "auto"
+data = "synthetic"   # -> configs/data/synthetic.toml
+
+model = "efficientnet_lite_b0"   # a backbone registry name
+
+[optim]
+lr = 0.001
+epochs = 8
+scheduler = "cosine"
+warmup_epochs = 1
+
+[augment]
+mix_p = 0.5   # MixUp/CutMix probability (0 disables)
+
+[log]
+out_dir = "runs/synthetic"
+run_name = "synthetic"
+mlflow = true
