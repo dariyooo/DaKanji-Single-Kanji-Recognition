@@ -93,7 +93,8 @@ Output: probabilities `(B, num_classes)` aligned with `labels.txt`.
 
 | name | android | iOS | Linux | MacOS | Windows | Web |
 |:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| DaKanji (v4+) | ✅ | ✅ | ✅ | ✅ | ✅ |   |
+| [DaKanji (v4+)](dakanji.app) | ✅ | ✅ | ✅ | ✅ | ✅ |   |
+| [Kanjiheatmap](https://kanjiheatmap.com/) |  |  |  |  |  | ✅ |
 
 ## Full Results
 
