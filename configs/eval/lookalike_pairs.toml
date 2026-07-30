@@ -1,0 +1,56 @@
+# Curated visually-confusable pairs: every pair is a must-hit positive (the two
+# characters LOOK alike). Shared components are irrelevant, similarity is purely visual.
+# The mirage categories share zero components, so any component/radical-based
+# similarity scores them 0 by construction. All characters verified present in labels.txt.
+
+# Left/right structure mimics (e.g. 米 mimics 木, 且 mimics 目, nothing actually shared).
+left_right_mirage = [
+    ["粗", "相"],
+    ["袖", "神"],
+    ["由", "申"],
+    ["即", "郎"],
+    ["私", "松"],
+    ["録", "縁"],
+    ["抜", "波"],
+]
+
+# Vertical stacks that form the same tower from different blocks.
+top_bottom_mirage = [
+    ["崇", "祟"],
+    ["盲", "育"],
+    ["辛", "幸"],
+    ["妻", "毒"],
+    ["麦", "表"],
+]
+
+# Different radicals/structure, same woven silhouette.
+# (候/修 and 茶/査 were dropped: on inspection they don't genuinely look alike,
+# and every embedding plus human judgment agreed.)
+dense_block_mirage = [
+    ["兆", "北"],
+    ["匹", "四"],
+]
+
+# Base characters differing by minor stroke details only.
+atomic_mirage = [
+    ["千", "干"],
+    ["土", "士"],
+    ["牛", "午"],
+    ["人", "入"],
+    ["己", "巳"],
+]
+
+# Well-known learner confusions (may share components, still purely visual lookalikes).
+classic_confusables = [
+    ["未", "末"],
+    ["持", "待"],
+    ["待", "侍"],
+    ["大", "犬"],
+    ["犬", "太"],
+    ["織", "職"],
+    ["職", "識"],
+    ["石", "右"],
+    ["力", "九"],
+    ["口", "日"],
+    ["日", "目"],
+]
