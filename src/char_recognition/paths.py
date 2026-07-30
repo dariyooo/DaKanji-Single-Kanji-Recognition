@@ -15,7 +15,12 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 CONFIGS_DIR = PROJECT_ROOT / "configs"
 FONTS_DIR = PROJECT_ROOT / "fonts"
 LABELS_FILE = PROJECT_ROOT / "labels.txt"
-JP_FONT = FONTS_DIR / "NotoSerifCJKjp-Regular.otf"
+
+# Fonts ship zipped (fonts/fonts.zip) and `uv run scripts/setup.py` extracts them here.
+FONTS_ZIP = FONTS_DIR / "fonts.zip"
+JP_FONT = FONTS_DIR / "NotoSerifCJKjp-Regular.otf"  # Mincho (serif)
+JP_FONT_GOTHIC = FONTS_DIR / "NotoSansCJKjp-Regular.otf"
+JP_FONT_HANDWRITING = FONTS_DIR / "KleeOne-Regular.ttf"
 
 # Generated outputs (all under one directory).
 OUTPUTS_DIR = PROJECT_ROOT / "outputs"
