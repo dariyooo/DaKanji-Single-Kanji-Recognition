@@ -20,6 +20,10 @@ __pycache__/
 /dataset/
 /data/
 
+# fonts are committed as fonts/fonts.zip and scripts/setup.py extracts them here
+/fonts/*.otf
+/fonts/*.ttf
+
 # generated outputs (all under outputs/; change paths.OUTPUTS_DIR to relocate)
 /outputs/*
 !/outputs/.gitkeep

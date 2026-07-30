@@ -389,6 +389,7 @@ name = "char-recognition"
 version = "2.0.0"
 source = { editable = "." }
 dependencies = [
+    { name = "fonttools" },
     { name = "marimo" },
     { name = "matplotlib" },
     { name = "mlflow" },
@@ -426,6 +427,7 @@ optimize = [
 requires-dist = [
     { name = "char-recognition", extras = ["optimize", "onnx", "executorch"], marker = "extra == 'dev'" },
     { name = "executorch", marker = "extra == 'executorch'", specifier = ">=0.4" },
+    { name = "fonttools", specifier = ">=4.38" },
     { name = "marimo", specifier = ">=0.9" },
     { name = "matplotlib", specifier = ">=3.8" },
     { name = "mlflow", specifier = ">=2.14" },
