@@ -1,8 +1,4 @@
-"""One-time project setup: run once after cloning.
-
-Currently extracts the committed font archive (fonts/fonts.zip) into fonts/. The
-fonts are used for rendering (visual similarity) and plot labels (evaluate.py grid).
-Future one-time setup steps belong here too.
+"""One-time project setup: extracts fonts/fonts.zip into fonts/.
 
     uv run scripts/setup.py
 """
