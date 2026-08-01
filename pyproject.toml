@@ -17,6 +17,7 @@ dependencies = [
     "marimo>=0.9",
     "tqdm>=4.66",
     "mlflow>=2.14",  # manual logging in the training loop; local sqlite store under outputs/
+    "fonttools>=4.38",
 ]
 
 [project.optional-dependencies]
@@ -106,6 +107,7 @@ warn_return_any = false  # torch/torchvision ops are typed as Any upstream
 [[tool.mypy.overrides]]
 # Third-party libs that ship without type stubs.
 module = [
+    "fontTools.*",
     "torchvision.*",
     "marimo.*",
     "wandb.*",

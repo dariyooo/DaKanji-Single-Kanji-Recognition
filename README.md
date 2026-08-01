@@ -26,15 +26,21 @@ This is the complete v2 rewrite of this project where I applied all my learnings
 
 ## Quick start
 
+One-time setup (extracts the committed fonts from `fonts/fonts.zip`):
+
+```bash
+uv run scripts/setup.py
+```
+
 Put your labled images in a directory `<root>/<class_index>/*.{jpg,png}` and point the data config at
 them. [configs/data/kanji.toml](configs/data/kanji.toml): `root` is the train set,
 `val_root` the held-out set. Then run the pipeline:
 
 ```bash
-# 0. (optional) watch metrics live — separate terminal.
+# 0. (optional) watch metrics live in a separate terminal.
 uv run mlflow ui --backend-store-uri sqlite:///outputs/mlflow.db --port 5001   # http://127.0.0.1:5001
 
-# 1. Train the fp32 model (90/10 split; writes outputs/runs/best.pt, logs to MLflow)
+# 1. Train the fp32 model (90/10 split, writes outputs/runs/best.pt, logs to MLflow)
 uv run python scripts/train.py --config configs/runs/kanji_efficientnet_lite_b0.toml --epochs 30
 
 # 2. Evaluate fp32 on the held-out set (top-1/5/10 + outputs/eval/predictions.png grid)
@@ -52,20 +58,38 @@ uv run python scripts/export.py --from outputs/runs/best.pt
 
 The fp32 `best.pt` stays the source of truth: re-quantize or re-export from it any time.
 (Step 4 runs the `.pte` per image through the ExecuTorch runtime, so it's slower than the
-fp32 eval — point `--root` at a subset for a quick check.)
+fp32 eval. Point `--root` at a subset for a quick check.)
 
 ### Advanced
 
 ```bash
-# Grid search backbone x input size (fp32) to pick an architecture; results -> CSV + MLflow
+# Grid search backbone x input size (fp32) to pick an architecture, results -> CSV + MLflow
 uv run python scripts/architecture_search.py --config configs/runs/grid.toml
 
-# Or experiment interactively (widgets for backbone / size / lr; logs to MLflow)
+# Or experiment interactively (widgets for backbone / size / lr, logs to MLflow)
 uv run marimo edit notebooks/train.py
 
 # Apple CoreML .pte (ANE/GPU/CPU). Self-contained: uv pins an isolated torch 2.7 toolchain
 # from the script header, because the CoreML delegate miscompiles on the main torch 2.12 stack.
 uv run scripts/export_coreml.py --from outputs/runs/best.pt
+```
+
+### Visually similar characters
+
+Rank every character's visual lookalikes (purely visual, radicals and components are
+irrelevant) from a trained checkpoint: glyphs are rendered in 3 fonts (Mincho, Gothic,
+handwriting), embedded from several layers of the model (conv stages, penultimate
+feature, the low-rank head) and from the classifier weight rows, then ranked by cosine
+similarity. Each embedding is scored against curated lookalike pairs
+([configs/eval/lookalike_pairs.toml](configs/eval/lookalike_pairs.toml)):
+
+```bash
+# Writes neighbours_{embedding}.json + results.csv to outputs/similarity/
+# (--min-score auto trims neighbours below each embedding's weakest confirmed lookalike)
+uv run python scripts/visual_similarity.py --min-score auto --grid 20
+
+# Package the neighbours table as a static Yomitan kanji dictionary (no runtime inference)
+uv run python scripts/export_yomitan.py
 ```
 
 ### Packaging for the DaKanji app
