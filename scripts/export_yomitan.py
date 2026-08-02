@@ -34,16 +34,20 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
+# Stat definition the kanji entries reference: [name, category, order, notes, score].
+TAG_BANK = [["similar", "misc", 0, "Visually similar characters", 0]]
+
+
 def kanji_bank(neighbours: dict[str, list[dict]], with_scores: bool) -> list[list]:
     """One row per character with neighbours: [char, onyomi, kunyomi, tags, meanings, stats]."""
     bank = []
     for char, similar in neighbours.items():
         if not similar:
             continue  # no real lookalikes -> no entry (better than forced filler)
-        meanings = [
-            f"{n['char']} ({n['score']:.2f})" if with_scores else n["char"] for n in similar
-        ]
-        bank.append([char, "", "", "", meanings, {}])
+        chars = " ".join(
+            f"{n['char']}({n['score']:.2f})" if with_scores else n["char"] for n in similar
+        )
+        bank.append([char, "", "", "", [], {"similar": chars}])
     return bank
 
 
@@ -76,6 +80,7 @@ def main() -> None:
     args.out.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(args.out, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         zf.writestr("index.json", json.dumps(index, ensure_ascii=False))
+        zf.writestr("tag_bank_1.json", json.dumps(TAG_BANK, ensure_ascii=False))
         zf.writestr("kanji_bank_1.json", json.dumps(bank, ensure_ascii=False))
     # Hosted copy Yomitan polls to detect a new revision.
     index_path = args.out.with_name(args.out.stem + "_index.json")
