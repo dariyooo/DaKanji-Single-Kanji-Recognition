@@ -6,6 +6,7 @@ if you want probability outputs (a converted graph can't be re-wrapped afterward
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 
 from torch import nn
@@ -14,7 +15,35 @@ from torch.export import export
 from char_recognition.export.loading import CAPTURE_CHANNELS, example_input
 from char_recognition.optimize.pt2e import DEFAULT_MAX_SIDE, dynamic_input_shapes
 
-__all__ = ["export_xnnpack"]
+__all__ = ["export_xnnpack", "export_xnnpack_methods"]
+
+
+def export_xnnpack_methods(
+    model: nn.Module,
+    path: str | Path,
+    *,
+    image_size: tuple[int, int],
+    bounds: Sequence[int],
+) -> Path:
+    """Lower one ``.pte`` holding a method per input bound. Returns the written path.
+
+    Every method is named ``forward_{side}`` after the bound it accepts, so the contract is
+    explicit at the call site. Weights are shared across methods, and each method's arena is
+    allocated only when that method is loaded.
+    """
+    from executorch.backends.xnnpack.partition.xnnpack_partitioner import XnnpackPartitioner
+    from executorch.exir import to_edge_transform_and_lower
+
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    sample = (example_input(image_size, in_channels=CAPTURE_CHANNELS, batch=1),)
+    methods = {}
+    for side in sorted(set(bounds), reverse=True):
+        shapes = dynamic_input_shapes(True, max_side=side, batch=False)
+        methods[f"forward_{side}"] = export(model, sample, dynamic_shapes=shapes)
+    program = to_edge_transform_and_lower(methods, partitioner=[XnnpackPartitioner()]).to_executorch()
+    path.write_bytes(program.buffer)
+    return path
 
 
 def export_xnnpack(

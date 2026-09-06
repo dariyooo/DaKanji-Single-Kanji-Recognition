@@ -29,7 +29,7 @@ from char_recognition.engine.optim import build_optimizer, build_scheduler
 from char_recognition.engine.runner import prepare_data
 from char_recognition.engine.trainer import Trainer
 from char_recognition.export.loading import CAPTURE_CHANNELS, example_input, load_recognizer
-from char_recognition.export.xnnpack import export_xnnpack
+from char_recognition.export.xnnpack import export_xnnpack, export_xnnpack_methods
 from char_recognition.models.recognizer import ProbabilityModel
 from char_recognition.optimize.pt2e import CAPTURE_BATCH, convert_quantized, prepare_xnnpack
 from char_recognition.paths import EXPORTS_DIR, resolve_output
@@ -137,16 +137,30 @@ def main() -> None:
     converted = convert_quantized(prepared)
     print(f"int8 val accuracy: {_int8_accuracy(converted, val_loader, device, args.max_steps):.4f}")
 
-    pte = export_xnnpack(converted, args.output, image_size=image_size)
-    print(f"wrote {pte} ({pte.stat().st_size / 1e6:.1f} MB)")
-
-    # Sanity-check the artifact actually loads + runs in the ExecuTorch runtime.
+    # Sanity-check every method actually loads + runs in the ExecuTorch runtime.
     from executorch.runtime import Runtime
 
-    method = Runtime.get().load_program(str(pte)).load_method("forward")
-    assert method is not None
-    out = method.execute([example_input(image_size, in_channels=in_channels)])[0]
-    print(f"runtime check OK: output {tuple(out.shape)}")
+    if len(args.max_side) > 1:
+        # One artifact, a method per bound, so a caller picks the arena it needs.
+        output = args.output or EXPORTS_DIR / "model_xnnpack.pte"
+        pte = export_xnnpack_methods(converted, output, image_size=image_size, bounds=args.max_side)
+        names = {s: f"forward_{s}" for s in sorted(set(args.max_side))}
+        print(f"wrote {pte} ({pte.stat().st_size / 1e6:.1f} MB, methods: {', '.join(names.values())})")
+        program = Runtime.get().load_program(str(pte))
+        for side, name in names.items():
+            method = program.load_method(name)
+            assert method is not None
+            out = method.execute([example_input(image_size, in_channels=in_channels)])[0]
+            print(f"  {name} (<= {side}px) OK: output {tuple(out.shape)}")
+    else:
+        side = args.max_side[0]
+        output = args.output or EXPORTS_DIR / f"model_xnnpack_{side}_1.pte"
+        pte = export_xnnpack(converted, output, image_size=image_size, max_side=side)
+        print(f"wrote {pte} ({pte.stat().st_size / 1e6:.1f} MB, accepts up to {side}px)")
+        method = Runtime.get().load_program(str(pte)).load_method("forward")
+        assert method is not None
+        out = method.execute([example_input(image_size, in_channels=in_channels)])[0]
+        print(f"  runtime check OK: output {tuple(out.shape)}")
 
 
 if __name__ == "__main__":
