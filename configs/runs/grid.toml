@@ -31,7 +31,7 @@ mix_p = 0.2
 [log]
 out_dir = "runs/grid"
 mlflow = true
-mlflow_experiment = "dakanji-grid"
+mlflow_experiment = "DaKanji-Single-Kanji-Recognition/architecture-grid"
 
 [grid]
 # Small -> large: ~2.8M, 8.2M, 12.5M, 11.7M, 20.1M params (head dominates the total).
