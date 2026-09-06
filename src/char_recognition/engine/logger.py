@@ -7,6 +7,7 @@ itself rather than crashing training. The store (sqlite db + artifacts) lives un
 
 from __future__ import annotations
 
+import os
 import warnings
 from collections.abc import Callable
 from pathlib import Path
@@ -53,12 +54,16 @@ def setup_mlflow(experiment: str, tracking_uri: str | None = None) -> Any:
     from char_recognition.paths import MLRUNS_DIR, OUTPUTS_DIR
 
     OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
-    # mlflow's file backend is deprecated; use a sqlite store + artifacts dir.
-    if tracking_uri is None:
+    # A remote server is selected with MLFLOW_TRACKING_URI (mlflow's own convention), so no host
+    # ends up committed. Falling back to a local sqlite store: mlflow's file backend is deprecated.
+    tracking_uri = tracking_uri or os.environ.get("MLFLOW_TRACKING_URI")
+    remote = tracking_uri is not None
+    if not remote:
         _enable_sqlite_wal(OUTPUTS_DIR / "mlflow.db")
     mlflow.set_tracking_uri(tracking_uri or f"sqlite:///{OUTPUTS_DIR / 'mlflow.db'}")
     if mlflow.get_experiment_by_name(experiment) is None:
-        mlflow.create_experiment(experiment, artifact_location=MLRUNS_DIR.as_uri())
+        # A tracking server owns its own artifact store, so only set a location locally.
+        mlflow.create_experiment(experiment, artifact_location=None if remote else MLRUNS_DIR.as_uri())
     mlflow.set_experiment(experiment)
     return mlflow
 
