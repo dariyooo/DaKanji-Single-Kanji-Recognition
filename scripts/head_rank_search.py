@@ -69,7 +69,7 @@ def main() -> None:
     base.optim.lr = args.lr
     base.optim.scheduler = "none"  # constant low lr for a short fine-tune
     base.optim.warmup_epochs = 0
-    base.log.mlflow_experiment = "dakanji-head-rank"
+    base.log.mlflow_experiment = "DaKanji-Single-Kanji-Recognition/head-rank"
     device = resolve_device(base.device)
     mlflow = (
         setup_mlflow(base.log.mlflow_experiment, base.log.mlflow_tracking_uri) if base.log.mlflow else None

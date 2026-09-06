@@ -12,5 +12,5 @@ class LogConfig:
     log_every: int = 20
 
     mlflow: bool = True
-    mlflow_experiment: str = "dakanji-char-recognition"
+    mlflow_experiment: str = "DaKanji-Single-Kanji-Recognition/train-and-qat"
     mlflow_tracking_uri: str | None = None  # None => local ./mlruns

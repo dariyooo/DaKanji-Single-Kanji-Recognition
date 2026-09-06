@@ -75,7 +75,9 @@ def _calibration_images(config_path: Path, n: int) -> list[np.ndarray]:
         raise SystemExit(f"{config_path} sets no data.val_root for int8 ONNX calibration")
     labels = load_labels(cfg.data.labels_file)
     ds = CharFolderDataset(
-        root, image_size=cfg.data.image_size, in_channels=cfg.data.in_channels,
+        root,
+        image_size=cfg.data.image_size,
+        in_channels=cfg.data.in_channels,
         class_to_idx=canonical_class_map(root, labels),
     )
     idx = list(range(len(ds)))
