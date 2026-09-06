@@ -9,13 +9,32 @@ from __future__ import annotations
 from collections.abc import Sequence
 from pathlib import Path
 
+import torch
 from torch import nn
 from torch.export import export
 
 from char_recognition.export.loading import CAPTURE_CHANNELS, example_input
 from char_recognition.optimize.pt2e import DEFAULT_MAX_SIDE, dynamic_input_shapes
 
-__all__ = ["export_xnnpack", "export_xnnpack_methods"]
+__all__ = ["export_xnnpack", "export_xnnpack_methods", "load_quantized", "save_quantized"]
+
+
+def save_quantized(model: nn.Module, path: str | Path, *, image_size: tuple[int, int], max_side: int) -> Path:
+    """Save a converted int8 graph so it can be re-lowered later without redoing QAT.
+
+    ``max_side`` is a ceiling: the saved program re-exports to any bound at or below it.
+    """
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    sample = (example_input(image_size, in_channels=CAPTURE_CHANNELS, batch=1),)
+    shapes = dynamic_input_shapes(True, max_side=max_side, batch=False)
+    torch.export.save(export(model, sample, dynamic_shapes=shapes), str(path))
+    return path
+
+
+def load_quantized(path: str | Path) -> nn.Module:
+    """Load a graph saved by ``save_quantized``, ready to lower with ``export_xnnpack``."""
+    return torch.export.load(str(path)).module()
 
 
 def export_xnnpack_methods(

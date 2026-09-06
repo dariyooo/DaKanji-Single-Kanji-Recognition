@@ -10,6 +10,9 @@ data loading and ``--max-steps`` (QAT only needs a short fine-tune, so a cap is 
     # Stage 2:
     uv run python scripts/quantize.py --config configs/runs/kanji_efficientnet_lite_b0.toml \
         --qat-epochs 8 --lr 1e-5 --max-steps 500
+
+``--ptq`` skips the fine-tune and just calibrates (faster, usually less accurate). ``--max-side``
+bounds the accepted height/width, which is what sets the artifact's runtime memory arena.
 """
 
 from __future__ import annotations
@@ -29,9 +32,14 @@ from char_recognition.engine.optim import build_optimizer, build_scheduler
 from char_recognition.engine.runner import prepare_data
 from char_recognition.engine.trainer import Trainer
 from char_recognition.export.loading import CAPTURE_CHANNELS, example_input, load_recognizer
-from char_recognition.export.xnnpack import export_xnnpack, export_xnnpack_methods
+from char_recognition.export.xnnpack import export_xnnpack, export_xnnpack_methods, save_quantized
 from char_recognition.models.recognizer import ProbabilityModel
-from char_recognition.optimize.pt2e import CAPTURE_BATCH, convert_quantized, prepare_xnnpack
+from char_recognition.optimize.pt2e import (
+    CAPTURE_BATCH,
+    DEFAULT_MAX_SIDE,
+    convert_quantized,
+    prepare_xnnpack,
+)
 from char_recognition.paths import EXPORTS_DIR, resolve_output
 
 
@@ -52,14 +60,51 @@ def parse_args() -> argparse.Namespace:
     p.add_argument(
         "--from", dest="ckpt", type=Path, default=None, help="fp32 checkpoint (default <out_dir>/best.pt)"
     )
-    p.add_argument("--output", type=Path, default=EXPORTS_DIR / "model_xnnpack.pte")
+    p.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="output .pte (default model_xnnpack_{max-side}_1.pte, ie bound and pinned batch)",
+    )
     p.add_argument("--qat-epochs", type=int, default=5)
     p.add_argument("--lr", type=float, default=1e-5, help="QAT fine-tune learning rate (keep small)")
+    p.add_argument(
+        "--warmup-epochs",
+        type=int,
+        default=None,
+        help="override the config's warmup epochs (the shipped v2.0 QAT used 1)",
+    )
     p.add_argument("--device", default="cpu", help="QAT device (fake-quant is most reliable on CPU)")
     p.add_argument(
         "--max-steps", type=int, default=None, help="cap batches per QAT epoch / accuracy eval (recommended)"
     )
+    p.add_argument(
+        "--ptq", action="store_true", help="post-training quantization: calibrate only, no fine-tune"
+    )
+    p.add_argument("--calib-batches", type=int, default=32, help="calibration batches for --ptq")
+    p.add_argument(
+        "--max-side",
+        type=int,
+        nargs="+",
+        default=[DEFAULT_MAX_SIDE],
+        help="input bounds to export, one .pte each, all from this one quantization run",
+    )
+    p.add_argument(
+        "--save-quantized",
+        type=Path,
+        default=None,
+        help="where to save the int8 graph for re-lowering (default quantized.pt2 beside --from)",
+    )
     return p.parse_args()
+
+
+@torch.no_grad()
+def _calibrate(model: torch.nn.Module, loader: DataLoader, device: torch.device, batches: int) -> None:
+    """Run observers over a few batches to pick int8 ranges (the PTQ counterpart to fine-tuning)."""
+    for step, (images, _targets) in enumerate(tqdm(loader, desc="calibrate", leave=False, total=batches)):
+        model(images.to(device))
+        if step + 1 >= batches:
+            break
 
 
 @torch.no_grad()
@@ -81,11 +126,15 @@ def _int8_accuracy(
 
 def main() -> None:
     args = parse_args()
+    if args.output is not None and len(args.max_side) > 1:
+        raise SystemExit("--output names a single file, so it can't be used with several --max-side values")
     cfg = load_config(args.config)
     cfg.augment.mix_p = 0.0  # hard targets for the NLL fine-tune; mixing isn't needed here
     cfg.optim.amp = False  # fake-quant runs in fp32
     cfg.optim.epochs = args.qat_epochs
     cfg.optim.lr = args.lr
+    if args.warmup_epochs is not None:
+        cfg.optim.warmup_epochs = args.warmup_epochs
     cfg.log.run_name = "qat"
     device = torch.device(args.device)
 
@@ -108,34 +157,53 @@ def main() -> None:
     # through (the channel dim is dynamic, min 1).
     deployable = ProbabilityModel(model).to(device)
     example = (example_input(image_size, in_channels=CAPTURE_CHANNELS, batch=CAPTURE_BATCH).to(device),)
-    prepared = cast(GraphModule, prepare_xnnpack(deployable, example, qat=True, dynamic=True))
-    # The exported QAT model is already in the correct training state. Switching it with
-    # move_exported_model_to_train/eval (what .train()/.eval() trigger) corrupts its fake-quant
-    # ranges, so neutralize the Trainer's mode toggles and leave the model exactly as prepared.
-    prepared.train = lambda mode=True: prepared  # type: ignore[method-assign]
-    prepared.eval = lambda: prepared  # type: ignore[method-assign]
-
-    # QAT fine-tune through the same Trainer as base training: tqdm bars, MLflow, parallel loading.
-    optimizer = build_optimizer(prepared, cfg.optim)
-    logger = MetricLogger(cfg.log, hparams=cfg.to_dict()) if cfg.log.mlflow else None
-    trainer = Trainer(
-        prepared,
-        optimizer,
-        build_scheduler(optimizer, cfg.optim),
-        _ProbNLLLoss(),
-        device=device,
-        optim_cfg=cfg.optim,
-        logger=logger,
-        log_every=cfg.log.log_every,
+    # Capture at the widest bound requested: it is a ceiling, and every .pte re-exports below it.
+    capture_side = max(args.max_side)
+    prepared = cast(
+        GraphModule,
+        prepare_xnnpack(deployable, example, qat=not args.ptq, dynamic=True, max_side=capture_side),
     )
-    try:
-        trainer.fit(train_loader, val_loader, epochs=args.qat_epochs, max_steps=args.max_steps)
-    finally:
-        if logger is not None:
-            logger.close()
+
+    if args.ptq:
+        _calibrate(prepared, train_loader, device, args.calib_batches)
+    else:
+        # The exported QAT model is already in the correct training state. Switching it with
+        # move_exported_model_to_train/eval (what .train()/.eval() trigger) corrupts its fake-quant
+        # ranges, so neutralize the Trainer's mode toggles and leave the model exactly as prepared.
+        prepared.train = lambda mode=True: prepared  # type: ignore[method-assign]
+        prepared.eval = lambda: prepared  # type: ignore[method-assign]
+
+        # QAT fine-tune through the same Trainer as base training: tqdm bars, MLflow, parallel loading.
+        optimizer = build_optimizer(prepared, cfg.optim)
+        logger = MetricLogger(cfg.log, hparams=cfg.to_dict()) if cfg.log.mlflow else None
+        trainer = Trainer(
+            prepared,
+            optimizer,
+            build_scheduler(optimizer, cfg.optim),
+            _ProbNLLLoss(),
+            device=device,
+            optim_cfg=cfg.optim,
+            logger=logger,
+            log_every=cfg.log.log_every,
+        )
+        try:
+            trainer.fit(train_loader, val_loader, epochs=args.qat_epochs, max_steps=args.max_steps)
+        finally:
+            if logger is not None:
+                logger.close()
 
     converted = convert_quantized(prepared)
     print(f"int8 val accuracy: {_int8_accuracy(converted, val_loader, device, args.max_steps):.4f}")
+
+    # Save the quantized graph first: a QAT fine-tune is expensive and is otherwise lost here,
+    # leaving the .pte (which bakes in its bound) as the only copy.
+    saved = save_quantized(
+        converted,
+        args.save_quantized or ckpt_path.with_name("quantized.pt2"),
+        image_size=image_size,
+        max_side=capture_side,
+    )
+    print(f"saved int8 graph to {saved} (re-lowers to any bound up to {capture_side})")
 
     # Sanity-check every method actually loads + runs in the ExecuTorch runtime.
     from executorch.runtime import Runtime
