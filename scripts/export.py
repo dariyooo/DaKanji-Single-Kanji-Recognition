@@ -19,6 +19,7 @@ from char_recognition.export.executorch import export_executorch
 from char_recognition.export.gpu import export_vulkan
 from char_recognition.export.loading import load_recognizer
 from char_recognition.export.onnx import export_onnx, export_onnx_int8, onnx_parity
+from char_recognition.optimize.pt2e import DEFAULT_MAX_SIDE
 from char_recognition.paths import EXPORTS_DIR, RUNS_DIR
 
 if TYPE_CHECKING:
@@ -32,6 +33,12 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--pte", type=Path, default=EXPORTS_DIR / "model.pte", help="ExecuTorch fp32 output path")
     p.add_argument("--opset", type=int, default=18)
     p.add_argument("--static", action="store_true", help="fix the input shape (default: dynamic batch/H/W)")
+    p.add_argument(
+        "--max-side",
+        type=int,
+        default=DEFAULT_MAX_SIDE,
+        help="largest accepted height/width, which sets the runtime memory arena",
+    )
     p.add_argument("--skip-onnx", action="store_true")
     p.add_argument("--skip-executorch", action="store_true")
     p.add_argument("--no-verify", action="store_true", help="skip the ONNX vs PyTorch parity check")
@@ -100,7 +107,9 @@ def main() -> None:
 
     if not args.skip_executorch:
         try:
-            pte_path = export_executorch(model, args.pte, image_size=model.image_size, dynamic=dynamic)
+            pte_path = export_executorch(
+                model, args.pte, image_size=model.image_size, dynamic=dynamic, max_side=args.max_side
+            )
             print(f"wrote {pte_path} ({_mb(pte_path):.1f} MB)")
         except ImportError as exc:
             print(f"skipped ExecuTorch (.pte): {exc}")
