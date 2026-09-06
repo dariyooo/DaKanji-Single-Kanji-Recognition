@@ -8,7 +8,7 @@ in-training split.
 
     uv run python scripts/evaluate.py --config configs/runs/kanji_efficientnet_lite_b0.toml
     uv run python scripts/evaluate.py --config configs/runs/kanji_efficientnet_lite_b0.toml \
-        --pte outputs/exports/model_xnnpack.pte
+        --pte outputs/exports/model_xnnpack_1024_1.pte
 """
 
 from __future__ import annotations
@@ -130,7 +130,9 @@ def main() -> None:
         predict, image_size, in_channels, num_classes, source = _checkpoint_predictor(ckpt, device)
 
     dataset = CharFolderDataset(
-        root, image_size=image_size, in_channels=in_channels,
+        root,
+        image_size=image_size,
+        in_channels=in_channels,
         class_to_idx=canonical_class_map(root, labels),
     )
     if dataset.num_classes != num_classes:

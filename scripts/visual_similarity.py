@@ -1,6 +1,6 @@
 """Rank visually similar characters and write neighbours JSONs + results.csv to outputs/similarity/.
 
-    uv run python scripts/visual_similarity.py   # uses outputs/runs/head_rank/r128/best.pt
+uv run python scripts/visual_similarity.py   # uses outputs/runs/head_rank/r128/best.pt
 """
 
 from __future__ import annotations
@@ -40,7 +40,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--out-dir", type=Path, default=None, help="default outputs/similarity/")
     p.add_argument("--k", type=int, default=10, help="neighbours per character")
     p.add_argument(
-        "--min-score", default="0",
+        "--min-score",
+        default="0",
         help="drop neighbours below this cosine score in the JSON. 'auto' calibrates per embedding "
         "from the lookalike pairs (lowest confirmed-lookalike score), trimming forced filler while "
         "keeping every confirmed hit. Pair metrics are unaffected",
@@ -99,8 +100,14 @@ def _write_csv(path: Path, results: dict[str, dict[str, CategoryResult]], k: int
 
 
 def _plot_grid(
-    out: Path, rows: int, k: int, labels: list[str], glyphs: torch.Tensor,
-    indices: torch.Tensor, scores: torch.Tensor, queries: list[int],
+    out: Path,
+    rows: int,
+    k: int,
+    labels: list[str],
+    glyphs: torch.Tensor,
+    indices: torch.Tensor,
+    scores: torch.Tensor,
+    queries: list[int],
 ) -> None:
     """Query glyph + its top-k neighbour glyphs per row (same style as evaluate.py's grid)."""
     import matplotlib.font_manager as fm

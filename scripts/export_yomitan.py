@@ -1,6 +1,6 @@
 """Package a neighbours JSON as a Yomitan kanji-bank dictionary (zip). Static data, no inference.
 
-    uv run python scripts/export_yomitan.py   # reads outputs/similarity/neighbours_head_class_weight.json
+uv run python scripts/export_yomitan.py   # reads outputs/similarity/neighbours_head_class_weight.json
 """
 
 from __future__ import annotations
@@ -20,12 +20,12 @@ RELEASE = "https://github.com/dariyooo/DaKanji-Single-Kanji-Recognition/releases
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument(
-        "--neighbours", type=Path, default=DEFAULT_NEIGHBOURS,
+        "--neighbours",
+        type=Path,
+        default=DEFAULT_NEIGHBOURS,
         help="neighbours JSON from scripts/visual_similarity.py (cutoff already applied there)",
     )
-    p.add_argument(
-        "--out", type=Path, default=resolve_output("similarity") / "dakanji_visual_similarity.zip"
-    )
+    p.add_argument("--out", type=Path, default=resolve_output("similarity") / "dakanji_visual_similarity.zip")
     p.add_argument("--title", default="DaKanji Visual Similarity")
     p.add_argument("--revision", default=datetime.date.today().strftime("%Y.%m.%d"))
     p.add_argument("--scores", action="store_true", help="append the cosine score to each entry")
@@ -44,9 +44,7 @@ def kanji_bank(neighbours: dict[str, list[dict]], with_scores: bool) -> list[lis
     for char, similar in neighbours.items():
         if not similar:
             continue  # no real lookalikes -> no entry (better than forced filler)
-        chars = " ".join(
-            f"{n['char']}({n['score']:.2f})" if with_scores else n["char"] for n in similar
-        )
+        chars = " ".join(f"{n['char']}({n['score']:.2f})" if with_scores else n["char"] for n in similar)
         bank.append([char, "", "", "", [], {"similar": chars}])
     return bank
 

@@ -91,9 +91,7 @@ def extract_image_embeddings(
 
         return hook
 
-    handles = [
-        module.register_forward_hook(_hook(name, pool)) for name, (module, pool) in layers.items()
-    ]
+    handles = [module.register_forward_hook(_hook(name, pool)) for name, (module, pool) in layers.items()]
     try:
         for start in range(0, images.shape[0], batch_size):
             model(images[start : start + batch_size].to(device))

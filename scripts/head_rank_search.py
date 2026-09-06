@@ -104,8 +104,13 @@ def main() -> None:
             _log_point(mlflow, result, row)
             print(f"  acc={accuracy:.3f} lat={latency_ms:.2f}ms size={size_mb:.2f}MB ({params / 1e6:.2f}M)")
         except Exception as exc:  # one rank failing must not abort the search
-            row |= {"accuracy": None, "latency_ms": None, "size_mb": None, "params": None,
-                    "error": f"{type(exc).__name__}: {exc}"}
+            row |= {
+                "accuracy": None,
+                "latency_ms": None,
+                "size_mb": None,
+                "params": None,
+                "error": f"{type(exc).__name__}: {exc}",
+            }
             print(f"  ERROR {type(exc).__name__}: {exc}")
         rows.append(row)
 
@@ -122,9 +127,7 @@ def _log_point(mlflow: Any, result: Any, row: dict) -> None:
     if run is None:
         return
     with mlflow.start_run(run_id=run.info.run_id):
-        mlflow.log_metrics(
-            {k: row[k] for k in ("accuracy", "latency_ms", "size_mb", "params")}
-        )
+        mlflow.log_metrics({k: row[k] for k in ("accuracy", "latency_ms", "size_mb", "params")})
         mlflow.set_tag("checkpoint", str(result.run_dir / "best.pt"))
 
 

@@ -65,7 +65,5 @@ def render_glyphs(
         canvas = Image.new("L", (width, height), color=0)
         # anchor="mm" centers on the glyph's layout box, which is how CJK fonts center glyphs.
         ImageDraw.Draw(canvas).text((width / 2, height / 2), char, fill=255, font=font, anchor="mm")
-        images[i, 0] = torch.frombuffer(bytearray(canvas.tobytes()), dtype=torch.uint8).reshape(
-            height, width
-        )
+        images[i, 0] = torch.frombuffer(bytearray(canvas.tobytes()), dtype=torch.uint8).reshape(height, width)
     return images, covered

@@ -1,6 +1,6 @@
 """One-time project setup: extracts fonts/fonts.zip into fonts/.
 
-    uv run scripts/setup.py
+uv run scripts/setup.py
 """
 
 from __future__ import annotations
