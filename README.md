@@ -18,8 +18,8 @@ This is the complete v2 rewrite of this project where I applied all my learnings
 
 | backend | precision | latency(ms) | size(MB) |
 |---|---|---|---|
-| ExecuTorch portable (CPU) | fp32 | 36.60 | 8.20 |
-| XNNPACK (CPU) | int8 | 0.15 | 2.16 |
+| ONNX Runtime (CPU) | int8 | 0.14 | 2.23 |
+| XNNPACK (CPU) | int8 | 0.16 | 2.17 |
 | CoreML (ANE/GPU/CPU) | fp16 | 0.15 | 4.20 |
 
 [Full results](#full-results)
@@ -46,11 +46,11 @@ uv run python scripts/train.py --config configs/runs/kanji_efficientnet_lite_b0.
 # 2. Evaluate fp32 on the held-out set (top-1/5/10 + outputs/eval/predictions.png grid)
 uv run python scripts/evaluate.py --config configs/runs/kanji_efficientnet_lite_b0.toml --from outputs/runs/best.pt
 
-# 3. Quantize + QAT fine-tune -> int8 XNNPACK .pte (outputs/exports/model_xnnpack.pte)
+# 3. Quantize + QAT fine-tune -> int8 XNNPACK .pte (outputs/exports/model_xnnpack_1024_1.pte)
 uv run python scripts/quantize.py --config configs/runs/kanji_efficientnet_lite_b0.toml --from outputs/runs/best.pt --qat-epochs 8 --lr 1e-5
 
 # 4. Evaluate the int8 .pte on the same held-out set (compare to step 2)
-uv run python scripts/evaluate.py --config configs/runs/kanji_efficientnet_lite_b0.toml --pte outputs/exports/model_xnnpack.pte
+uv run python scripts/evaluate.py --config configs/runs/kanji_efficientnet_lite_b0.toml --pte outputs/exports/model_xnnpack_1024_1.pte
 
 # 5. Export the fp32 model to ONNX + ExecuTorch .pte (with PyTorch parity check)
 uv run python scripts/export.py --from outputs/runs/best.pt
@@ -71,8 +71,14 @@ uv run marimo edit notebooks/train.py
 
 # Apple CoreML .pte (ANE/GPU/CPU). Self-contained: uv pins an isolated torch 2.7 toolchain
 # from the script header, because the CoreML delegate miscompiles on the main torch 2.12 stack.
-uv run scripts/export_coreml.py --from outputs/runs/best.pt
+uv run scripts/export_coreml.py --from outputs/runs/head_rank/r128/best.pt
+
+# Vulkan .pte (cross-platform GPU), int8 or int4 weight-only on the classifier
+uv run python scripts/export.py --from outputs/runs/head_rank/r128/best.pt \
+    --vulkan outputs/exports/model_vulkan_int8.pte --vulkan-quantize 8
 ```
+
+You can follow the recipe in these files to export the models to other accelerators.
 
 ### Visually similar characters
 
@@ -94,20 +100,42 @@ uv run python scripts/export_yomitan.py
 
 ### Packaging for the DaKanji app
 
-[`scripts/prepare_release_assets.py`](scripts/prepare_release_assets.py) bundles every exported
-artifact (the per-backend `.pte`, ONNX, and labels) into the release assets the app expects, and
-throws if any are missing:
+[`scripts/prepare_release_assets.py`](scripts/prepare_release_assets.py) bundles the exported
+artifacts (the XNNPACK `.pte` per input bound, ONNX, labels, and the fp32 checkpoint) into the
+release assets the app expects, and throws if any are missing:
 
 ```bash
 uv run python scripts/prepare_release_assets.py   # -> outputs/release/
 ```
+
+#### Input bounds
+
+ExecuTorch reserves its memory arena at load from the declared bound, so each bound passed to
+`--max-side` becomes its own method: `forward_1024` (20 MiB) and `forward_64` (80 KiB). Load the
+one you need, and re-export any other bound from the `quantized.pt2` written beside the checkpoint.
+Inputs above a method's bound are a shape error, so downscale with
+`F.interpolate(x, size=(64, 64), mode="bilinear", align_corners=False)`. ONNX has no bound.
+
+#### Tracking runs on a remote MLflow
+
+Runs log to a local sqlite store under `outputs/` by default. Point them at a tracking server with
+mlflow's own environment variable, so no host ends up in the repo:
+
+```bash
+export MLFLOW_TRACKING_URI=http://<host>:<port>
+```
+
+Experiments are named `DaKanji-Single-Kanji-Recognition/<stage>` so several projects can share one
+server. A tracking server owns its artifact store, so artifacts upload through it and clients need
+no S3 credentials. Logging is best effort: if the server is unreachable, training warns once and
+carries on.
 
 ## How it works
 
 1. A **run config** (`configs/runs/*.toml`) holds the training config inline (model, optimizer, augmentation, logging) and references one reusable `data` fragment by name.
 2. **Training** runs a custom PyTorch loop (AMP, schedules, MLflow logging, checkpoints), producing an fp32 checkpoint as the source of truth.
 3. **Quantization** (optional, stage 2) fine-tunes that checkpoint with **PT2E QAT** and lowers it to an **int8 XNNPACK `.pte`** for on-device CPU/ARM inference.
-4. **Export** turns a checkpoint into an ONNX or ExecuTorch artifact that accepts a raw grayscale image of any size and outputs character probabilities.
+4. **Export** turns a checkpoint into an ONNX or ExecuTorch artifact with resize and normalize baked in, so it takes a raw grayscale image and outputs character probabilities. ONNX accepts any input size; an ExecuTorch `.pte` accepts sizes up to the bound it was exported with.
 
 **Inference.**
 Input: an image `(B, C, H, W)` with `C = 1` (grayscale, preferred) or `C = 3` (RGB, may have slightly worse results), any size, any range. The model resizes and reduces colour to one channel internally.
@@ -144,23 +172,22 @@ Results of embedding tuning
 | 96 | 0.994 | 0.72 | 7.34 | 1.83 |
 | 64 | 0.993 | 0.72 | 6.47 | 1.61 |
 
-Results of quantization (top-1/5/10 on a 20k val_root sample)
+Results of quantization (top-1/5/10 over the full val_root, 1,301,400 images)
 
-| precision | top-1 | top-5 | top-10 | latency(ms) | size(MB) | params(M) |
+| precision | top-1 | top-5 | top-10 | errors | size(MB) | params(M) |
 |---|---|---|---|---|---|---|
-| fp32 | 0.9973 | 1.0000 | 1.0000 | 0.71 | 8.20 | 2.04 |
-| fp16 | 0.9972 | 1.0000 | 1.0000 | ~0.71 | 4.10 | 2.04 |
-| **int8 (XNNPACK)** | **0.9948** | **1.0000** | **1.0000** | **0.15** | **2.16** | **2.04** |
-| int8 (ONNX) | 0.9965 | 1.0000 | 1.0000 | 0.15 | 2.23 | 2.04 |
+| fp32 | 0.9974 | 1.0000 | 1.0000 | 3,415 | 8.20 | 2.04 |
+| **int8 (ONNX)** | **0.9963** | **1.0000** | **1.0000** | **4,811** | **2.23** | **2.04** |
+| int8 (XNNPACK) | 0.9924 | 0.9999 | 1.0000 | 9,928 | 2.17 | 2.04 |
 
-Backend comparison
+Backend comparison (latency = median of 500 runs at 64x64, batch 1, M-series CPU)
 
-| backend | precision | latency(ms) | size(MB) |
-|---|---|---|---|
-| ExecuTorch portable (CPU) | fp32 | 36.60 | 8.20 |
-| XNNPACK (CPU) | int8 | 0.15 | 2.16 |
-| ONNX Runtime (CPU) | int8 | 0.15 | 2.23 |
-| CoreML (ANE/GPU/CPU) | fp16 | 0.15 | 4.20 |
+| backend | precision | median(ms) | p90 | max | size(MB) |
+|---|---|---|---|---|---|
+| ONNX Runtime (CPU) | int8 | 0.136 | 0.148 | 0.219 | 2.23 |
+| XNNPACK (CPU) | int8 | 0.158 | 0.173 | 0.191 | 2.17 |
+| CoreML (ANE/GPU/CPU) | fp16 | 0.15 | - | - | 4.20 |
+| ExecuTorch portable (CPU) | fp32 | 36.60 | - | - | 8.20 |
 
 ## Usage in your software
 
