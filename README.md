@@ -82,21 +82,9 @@ You can follow the recipe in these files to export the models to other accelerat
 
 ### Visually similar characters
 
-Rank every character's visual lookalikes (purely visual, radicals and components are
-irrelevant) from a trained checkpoint: glyphs are rendered in 3 fonts (Mincho, Gothic,
-handwriting), embedded from several layers of the model (conv stages, penultimate
-feature, the low-rank head) and from the classifier weight rows, then ranked by cosine
-similarity. Each embedding is scored against curated lookalike pairs
-([configs/eval/lookalike_pairs.toml](configs/eval/lookalike_pairs.toml)):
-
-```bash
-# Writes neighbours_{embedding}.json + results.csv to outputs/similarity/
-# (--min-score auto trims neighbours below each embedding's weakest confirmed lookalike)
-uv run python scripts/visual_similarity.py --min-score auto --grid 20
-
-# Package the neighbours table as a static Yomitan kanji dictionary (no runtime inference)
-uv run python scripts/export_yomitan.py
-```
+The visual look-alikes of every kanji are computed from this model's release in
+[kanji-visual-similarity-yomitan](https://github.com/dariyooo/kanji-visual-similarity-yomitan),
+which publishes them as a Yomitan / DaLang dictionary.
 
 ### Packaging for the DaKanji app
 
