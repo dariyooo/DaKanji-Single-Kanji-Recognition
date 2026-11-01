@@ -5,12 +5,17 @@ uv run scripts/setup.py
 
 from __future__ import annotations
 
-from char_recognition.paths import FONTS_DIR
-from char_recognition.visual_similarity.render import extract_fonts
+import zipfile
+
+from char_recognition.paths import FONTS_DIR, FONTS_ZIP
 
 
 def main() -> None:
-    names = extract_fonts()
+    if not FONTS_ZIP.exists():
+        raise SystemExit(f"font archive not found: {FONTS_ZIP}")
+    with zipfile.ZipFile(FONTS_ZIP) as archive:
+        names = archive.namelist()
+        archive.extractall(FONTS_DIR)
     print(f"extracted {len(names)} fonts into {FONTS_DIR}:")
     for name in names:
         print(f"  {name}")
